@@ -35,6 +35,19 @@ export type SendBookingPaymentConfirmedEmailInput = {
   supportPhone: unknown;
 };
 
+export type SendJobsMailboxBookingConfirmedEmailInput = {
+  to: string;
+  bookingReference: unknown;
+  customerFirstName: unknown;
+  pickupLocation: unknown;
+  dropoffLocation: unknown;
+  pickupTime: unknown;
+  vehicleClass: unknown;
+  amountPaid: unknown;
+  currency: unknown;
+  adminBookingUrl: unknown;
+};
+
 export type SendCustomerAccountCreatedEmailResult = {
   providerMessageId: string;
 };
@@ -171,6 +184,29 @@ export class ResendProvider implements ICustomerAccountCreatedEmailSender {
       }
     });
   }
+
+  async sendJobsMailboxBookingConfirmedEmail(
+    input: SendJobsMailboxBookingConfirmedEmailInput
+  ): Promise<SendCustomerAccountCreatedEmailResult> {
+    return this.sendTemplateEmail({
+      to: input.to,
+      templateIdOrAlias: 'jobs_mailbox_booking_confirmed_v1',
+      subject: `New Booking Alert - ${String(input.bookingReference ?? '')}`.trim(),
+      replyTo: 'newjobs@vantage-lane.com',
+      tags: [{ name: 'event_type', value: 'booking_payment_confirmed_admin' }],
+      variables: {
+        booking_reference: input.bookingReference,
+        customer_first_name: input.customerFirstName,
+        pickup_location: input.pickupLocation,
+        dropoff_location: input.dropoffLocation,
+        pickup_time: input.pickupTime,
+        vehicle_class: input.vehicleClass,
+        amount_paid: input.amountPaid,
+        currency: input.currency,
+        admin_booking_url: input.adminBookingUrl
+      }
+    });
+  }
 }
 
 /**
@@ -182,5 +218,8 @@ export type ICustomerAccountCreatedEmailSender = {
   ): Promise<SendCustomerAccountCreatedEmailResult>;
   sendBookingPaymentConfirmedEmail(
     input: SendBookingPaymentConfirmedEmailInput
+  ): Promise<SendCustomerAccountCreatedEmailResult>;
+  sendJobsMailboxBookingConfirmedEmail(
+    input: SendJobsMailboxBookingConfirmedEmailInput
   ): Promise<SendCustomerAccountCreatedEmailResult>;
 };

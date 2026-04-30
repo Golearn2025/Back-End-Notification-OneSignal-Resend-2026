@@ -2,8 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 import { NotificationProcessorService } from '../../src/modules/notifications/notification-processor.service.js';
 import type { ICustomerAccountCreatedEmailSender } from '../../src/modules/providers/resend.provider.js';
 
+function setRequiredEnv(): void {
+  process.env.PORT = process.env.PORT ?? '4002';
+  process.env.INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET ?? 'test_secret';
+  process.env.SUPABASE_URL = process.env.SUPABASE_URL ?? 'https://example.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? 'test_service_role';
+}
+
 describe('NotificationProcessorService', () => {
   it('creates email delivery and sends via Resend on success', async () => {
+    setRequiredEnv();
     process.env.PUBLIC_WEBSITE_URL = 'https://vantage-lane.com';
     const eventsRepository = {
       markEventDelivered: vi.fn(async () => undefined),
@@ -17,7 +25,8 @@ describe('NotificationProcessorService', () => {
     };
     const resend: ICustomerAccountCreatedEmailSender = {
       sendCustomerAccountCreatedEmail: vi.fn(async () => ({ providerMessageId: 'res_msg_1' })),
-      sendBookingPaymentConfirmedEmail: vi.fn(async () => ({ providerMessageId: 'res_pay_1' }))
+      sendBookingPaymentConfirmedEmail: vi.fn(async () => ({ providerMessageId: 'res_pay_1' })),
+      sendJobsMailboxBookingConfirmedEmail: vi.fn(async () => ({ providerMessageId: 'res_jobs_1' }))
     };
     const processor = new NotificationProcessorService(
       eventsRepository as never,
@@ -62,6 +71,7 @@ describe('NotificationProcessorService', () => {
   });
 
   it('uses variable fallbacks when payload fields are missing', async () => {
+    setRequiredEnv();
     const eventsRepository = {
       markEventDelivered: vi.fn(async () => undefined),
       markEventFailedRetryable: vi.fn(async () => undefined)
@@ -74,7 +84,8 @@ describe('NotificationProcessorService', () => {
     };
     const resend: ICustomerAccountCreatedEmailSender = {
       sendCustomerAccountCreatedEmail: vi.fn(async () => ({ providerMessageId: 'res_msg_2' })),
-      sendBookingPaymentConfirmedEmail: vi.fn(async () => ({ providerMessageId: 'res_pay_2' }))
+      sendBookingPaymentConfirmedEmail: vi.fn(async () => ({ providerMessageId: 'res_pay_2' })),
+      sendJobsMailboxBookingConfirmedEmail: vi.fn(async () => ({ providerMessageId: 'res_jobs_2' }))
     };
     const processor = new NotificationProcessorService(
       eventsRepository as never,
@@ -105,6 +116,7 @@ describe('NotificationProcessorService', () => {
   });
 
   it('marks failed_retryable on Resend failure', async () => {
+    setRequiredEnv();
     const eventsRepository = {
       markEventDelivered: vi.fn(async () => undefined),
       markEventFailedRetryable: vi.fn(async () => undefined)
@@ -119,7 +131,8 @@ describe('NotificationProcessorService', () => {
       sendCustomerAccountCreatedEmail: vi.fn(async () => {
         throw new Error('Resend send failed: status=422');
       }),
-      sendBookingPaymentConfirmedEmail: vi.fn(async () => ({ providerMessageId: 'res_pay_1' }))
+      sendBookingPaymentConfirmedEmail: vi.fn(async () => ({ providerMessageId: 'res_pay_1' })),
+      sendJobsMailboxBookingConfirmedEmail: vi.fn(async () => ({ providerMessageId: 'res_jobs_1' }))
     };
     const processor = new NotificationProcessorService(
       eventsRepository as never,
@@ -147,6 +160,7 @@ describe('NotificationProcessorService', () => {
   });
 
   it('marks unsupported events as failed_retryable', async () => {
+    setRequiredEnv();
     const eventsRepository = {
       markEventDelivered: vi.fn(async () => undefined),
       markEventFailedRetryable: vi.fn(async () => undefined)
@@ -159,7 +173,8 @@ describe('NotificationProcessorService', () => {
     };
     const resend: ICustomerAccountCreatedEmailSender = {
       sendCustomerAccountCreatedEmail: vi.fn(),
-      sendBookingPaymentConfirmedEmail: vi.fn()
+      sendBookingPaymentConfirmedEmail: vi.fn(),
+      sendJobsMailboxBookingConfirmedEmail: vi.fn()
     };
     const processor = new NotificationProcessorService(
       eventsRepository as never,
@@ -184,6 +199,7 @@ describe('NotificationProcessorService', () => {
   });
 
   it('sends payment_success_customer_v1 for booking_payment_confirmed', async () => {
+    setRequiredEnv();
     const eventsRepository = {
       markEventDelivered: vi.fn(async () => undefined),
       markEventFailedRetryable: vi.fn(async () => undefined)
@@ -196,7 +212,8 @@ describe('NotificationProcessorService', () => {
     };
     const resend: ICustomerAccountCreatedEmailSender = {
       sendCustomerAccountCreatedEmail: vi.fn(async () => ({ providerMessageId: 'res_msg_1' })),
-      sendBookingPaymentConfirmedEmail: vi.fn(async () => ({ providerMessageId: 'res_pay_1' }))
+      sendBookingPaymentConfirmedEmail: vi.fn(async () => ({ providerMessageId: 'res_pay_1' })),
+      sendJobsMailboxBookingConfirmedEmail: vi.fn(async () => ({ providerMessageId: 'res_jobs_1' }))
     };
     const processor = new NotificationProcessorService(
       eventsRepository as never,
@@ -258,7 +275,8 @@ describe('NotificationProcessorService', () => {
         bookingLine6Value: '2 / 1'
       })
     );
-    expect(deliveriesRepository.markDeliveryProviderAccepted).toHaveBeenCalledWith(
+    expect(deliveriesRepository.markDeliveryProviderAccepted).toHaveBeenNthCalledWith(
+      1,
       'del-pay-1',
       'res_pay_1',
       expect.objectContaining({
@@ -266,10 +284,20 @@ describe('NotificationProcessorService', () => {
         event_family: 'payment'
       })
     );
+    expect(resend.sendJobsMailboxBookingConfirmedEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'newjobs@vantage-lane.com',
+        bookingReference: 'CB-000576',
+        customerFirstName: 'Catalin',
+        amountPaid: '145.00',
+        currency: 'GBP'
+      })
+    );
     expect(eventsRepository.markEventDelivered).toHaveBeenCalledWith('evt-pay-1');
   });
 
   it('fails safely when required payment variables are missing', async () => {
+    setRequiredEnv();
     const eventsRepository = {
       markEventDelivered: vi.fn(async () => undefined),
       markEventFailedRetryable: vi.fn(async () => undefined)
@@ -282,7 +310,8 @@ describe('NotificationProcessorService', () => {
     };
     const resend: ICustomerAccountCreatedEmailSender = {
       sendCustomerAccountCreatedEmail: vi.fn(async () => ({ providerMessageId: 'res_msg_1' })),
-      sendBookingPaymentConfirmedEmail: vi.fn(async () => ({ providerMessageId: 'res_pay_1' }))
+      sendBookingPaymentConfirmedEmail: vi.fn(async () => ({ providerMessageId: 'res_pay_1' })),
+      sendJobsMailboxBookingConfirmedEmail: vi.fn(async () => ({ providerMessageId: 'res_jobs_1' }))
     };
     const processor = new NotificationProcessorService(
       eventsRepository as never,

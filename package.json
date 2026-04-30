@@ -23,6 +23,7 @@
     "@supabase/supabase-js": "latest",
     "dotenv": "^17.2.3",
     "fastify": "latest",
+    "nodemailer": "^8.0.7",
     "pino": "latest",
     "zod": "latest"
   },
