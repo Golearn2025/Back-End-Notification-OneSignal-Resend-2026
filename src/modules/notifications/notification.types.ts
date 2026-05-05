@@ -46,6 +46,8 @@ export type NotificationEvent = {
   status: NotificationEventStatus;
   customer_id: string | null;
   driver_id?: string | null;
+  booking_id?: string | null;
+  job_id?: string | null;
   occurred_at?: string;
   created_at?: string;
   next_retry_at?: string | null;

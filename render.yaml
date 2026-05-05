@@ -1,0 +1,69 @@
+services:
+  - type: web
+    name: backend-notifications-api
+    runtime: node
+    plan: starter
+    rootDir: backend-notifications
+    buildCommand: npm ci && npm run build
+    startCommand: node dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: INTERNAL_API_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: WORKER_ENABLED
+        value: "false"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+      - key: RESEND_TEMPLATE_AUDIT_API_KEY
+        sync: false
+      - key: ONESIGNAL_APP_ID
+        sync: false
+      - key: ONESIGNAL_REST_API_KEY
+        sync: false
+
+  - type: worker
+    name: backend-notifications-worker
+    runtime: node
+    plan: starter
+    rootDir: backend-notifications
+    buildCommand: npm ci && npm run build
+    startCommand: env -u SUPABASE_REALTIME_KEY node dist/worker.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: INTERNAL_API_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: WORKER_ENABLED
+        value: "true"
+      - key: WORKER_MODE
+        value: loop
+      - key: WORKER_POLL_INTERVAL_MS
+        value: "30000"
+      - key: SUPABASE_REALTIME_ENABLED
+        value: "true"
+      - key: SUPABASE_REALTIME_CHANNEL
+        value: notification-events
+      - key: SUPABASE_REALTIME_DISABLE_PROXY
+        value: "false"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+      - key: ONESIGNAL_APP_ID
+        sync: false
+      - key: ONESIGNAL_REST_API_KEY
+        sync: false

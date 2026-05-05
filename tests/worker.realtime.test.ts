@@ -1,7 +1,16 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetEnvCacheForTests } from '../src/config/env.js';
 import { bootstrapWorker } from '../src/worker.js';
 
 describe('worker realtime integration', () => {
+  beforeEach(() => {
+    resetEnvCacheForTests();
+    process.env.PORT = '4002';
+    process.env.INTERNAL_API_SECRET = 'secret';
+    process.env.SUPABASE_URL = 'https://example.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role';
+  });
+
   it('starts realtime listener when enabled', async () => {
     const info = vi.fn();
     const warn = vi.fn();

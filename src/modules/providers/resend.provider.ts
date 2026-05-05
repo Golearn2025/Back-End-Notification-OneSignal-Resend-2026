@@ -1,5 +1,10 @@
 import { getEnv } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
+import {
+  buildDriverJobAcceptedTemplateSend,
+  type SendDriverJobAcceptedEmailInput
+} from './resend/driver-job-accepted.template.js';
+import type { SendResendTemplateInput } from './resend/send-template.types.js';
 
 export type SendCustomerAccountCreatedEmailInput = {
   to: string;
@@ -52,14 +57,8 @@ export type SendCustomerAccountCreatedEmailResult = {
   providerMessageId: string;
 };
 
-export type SendResendTemplateInput = {
-  to: string;
-  templateIdOrAlias: string;
-  variables: Record<string, unknown>;
-  subject?: string;
-  replyTo?: string;
-  tags?: Array<{ name: string; value: string }>;
-};
+export type { SendResendTemplateInput } from './resend/send-template.types.js';
+export type { SendDriverJobAcceptedEmailInput } from './resend/driver-job-accepted.template.js';
 
 function escapeTemplateValue(value: unknown): string {
   if (typeof value !== 'string') {
@@ -207,6 +206,12 @@ export class ResendProvider implements ICustomerAccountCreatedEmailSender {
       }
     });
   }
+
+  async sendDriverJobAcceptedEmail(
+    input: SendDriverJobAcceptedEmailInput
+  ): Promise<SendCustomerAccountCreatedEmailResult> {
+    return this.sendTemplateEmail(buildDriverJobAcceptedTemplateSend(input));
+  }
 }
 
 /**
@@ -221,5 +226,8 @@ export type ICustomerAccountCreatedEmailSender = {
   ): Promise<SendCustomerAccountCreatedEmailResult>;
   sendJobsMailboxBookingConfirmedEmail(
     input: SendJobsMailboxBookingConfirmedEmailInput
+  ): Promise<SendCustomerAccountCreatedEmailResult>;
+  sendDriverJobAcceptedEmail(
+    input: SendDriverJobAcceptedEmailInput
   ): Promise<SendCustomerAccountCreatedEmailResult>;
 };

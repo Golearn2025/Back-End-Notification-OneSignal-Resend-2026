@@ -11,7 +11,7 @@ export type DriverPushMessageInput = {
   payoutDisplay: string | null;
 };
 
-function formatDriverPushDateTime(value: string | null): string | null {
+export function formatDriverPushDateTime(value: string | null): string | null {
   if (!value) {
     return null;
   }
@@ -108,5 +108,15 @@ export function buildDriverPushMessage(input: DriverPushMessageInput): { title: 
       formattedSections.length > 0
         ? formattedSections.join('\n')
         : `New ${input.bookingReference} job available`
+  };
+}
+
+/** Push după ce șoferul a acceptat jobul (același corp ca „new job”, titlu „Job confirmed”). */
+export function buildDriverJobAcceptedPushMessage(input: DriverPushMessageInput): { title: string; message: string } {
+  const { message } = buildDriverPushMessage(input);
+  const payoutPart = input.payoutDisplay ? ` • ${input.payoutDisplay}` : '';
+  return {
+    title: `Job confirmed • ${input.bookingReference}${payoutPart}`,
+    message
   };
 }
