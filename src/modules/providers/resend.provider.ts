@@ -61,10 +61,22 @@ export type { SendResendTemplateInput } from './resend/send-template.types.js';
 export type { SendDriverJobAcceptedEmailInput } from './resend/driver-job-accepted.template.js';
 
 function escapeTemplateValue(value: unknown): string {
-  if (typeof value !== 'string') {
+  if (value === null || value === undefined) {
     return '';
   }
-  return value
+
+  let raw = '';
+  if (typeof value === 'string') {
+    raw = value;
+  } else if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    raw = String(value);
+  } else if (value instanceof Date) {
+    raw = value.toISOString();
+  } else {
+    return '';
+  }
+
+  return raw
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')

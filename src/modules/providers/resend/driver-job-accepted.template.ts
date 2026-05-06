@@ -42,6 +42,62 @@ function payoutPartsFromPence(pence: unknown, currency: unknown): { amount: stri
   return { amount: (p / 100).toFixed(2), code: codeRaw };
 }
 
+function normalizeNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const n = Number(value);
+    if (Number.isFinite(n)) {
+      return n;
+    }
+  }
+  return null;
+}
+
+function normalizeText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function buildLegDisplay(legKind: unknown, legNumber: unknown): string {
+  const kind = normalizeText(legKind);
+  const number = normalizeNumber(legNumber);
+  if (!kind && number == null) {
+    return '-';
+  }
+  if (number == null) {
+    return kind || '-';
+  }
+  return `${kind || 'leg'} ${number}`;
+}
+
+function buildDurationDisplay(bookingType: unknown, hoursRequested: unknown, daysRequested: unknown): string {
+  const type = normalizeText(bookingType).toLowerCase();
+  const hours = normalizeNumber(hoursRequested);
+  const days = normalizeNumber(daysRequested);
+
+  if (type === 'hourly') {
+    return hours != null ? `${hours} h` : '-';
+  }
+  if (type === 'daily') {
+    return days != null ? `${days} d` : '-';
+  }
+
+  const parts: string[] = [];
+  if (hours != null) {
+    parts.push(`${hours} h`);
+  }
+  if (days != null) {
+    parts.push(`${days} d`);
+  }
+  return parts.length > 0 ? parts.join(' / ') : '-';
+}
+
+function buildFleetVehiclesDisplay(value: unknown): string {
+  const n = normalizeNumber(value);
+  return n != null && n > 0 ? String(n) : '-';
+}
+
 export function buildDriverJobAcceptedTemplateSend(
   input: SendDriverJobAcceptedEmailInput
 ): SendResendTemplateInput {
@@ -50,6 +106,14 @@ export function buildDriverJobAcceptedTemplateSend(
     input.driverPayoutPence,
     input.payoutCurrency
   );
+  const legDisplay = buildLegDisplay(input.legKind, input.legNumber);
+  const durationDisplay = buildDurationDisplay(
+    input.bookingType,
+    input.hoursRequested,
+    input.daysRequested
+  );
+  const fleetVehiclesDisplay = buildFleetVehiclesDisplay(input.fleetTotalLegs);
+
   return {
     to: input.to,
     templateIdOrAlias: DRIVER_JOB_ACCEPTED_TEMPLATE_ALIAS,
@@ -72,6 +136,9 @@ export function buildDriverJobAcceptedTemplateSend(
       hours_requested: input.hoursRequested,
       days_requested: input.daysRequested,
       fleet_total_legs: input.fleetTotalLegs,
+      leg_display: legDisplay,
+      duration_display: durationDisplay,
+      fleet_total_legs_display: fleetVehiclesDisplay,
       driver_payout: driverPayout,
       payout_currency: payoutCurrency,
       driver_payout_display: input.driverPayoutDisplay,
