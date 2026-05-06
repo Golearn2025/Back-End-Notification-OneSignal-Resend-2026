@@ -8,6 +8,7 @@ import { nextRetryAtIso } from './notification-shared.js';
 import { processBookingPaymentConfirmed } from './handlers/process-booking-payment-confirmed.handler.js';
 import { processCustomerAccountCreated } from './handlers/process-customer-account-created.handler.js';
 import { processDriverJobAvailable } from './handlers/process-driver-job-available.handler.js';
+import { processDriverJobAccepted } from './handlers/process-driver-job-accepted.handler.js';
 
 export class NotificationProcessorService {
   constructor(
@@ -51,6 +52,16 @@ export class NotificationProcessorService {
         event,
         eventsRepository: this.eventsRepository,
         deliveriesRepository: this.deliveriesRepository
+      });
+      return;
+    }
+
+    if (event.event_type === 'driver_job_accepted') {
+      await processDriverJobAccepted({
+        event,
+        eventsRepository: this.eventsRepository,
+        deliveriesRepository: this.deliveriesRepository,
+        resend: this.resend
       });
       return;
     }

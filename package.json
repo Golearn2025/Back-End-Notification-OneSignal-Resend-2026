@@ -9,6 +9,7 @@
     "dev:worker": "tsx watch src/worker.ts",
     "dev:worker:once": "WORKER_MODE=once tsx watch src/worker.ts",
     "dev:worker:loop": "WORKER_MODE=loop tsx watch src/worker.ts",
+    "dev:worker:loop:clean": "env -u SUPABASE_REALTIME_KEY WORKER_ENABLED=true WORKER_MODE=loop WORKER_POLL_INTERVAL_MS=30000 SUPABASE_REALTIME_ENABLED=true SUPABASE_REALTIME_CHANNEL=notification-events tsx watch src/worker.ts",
     "start": "node dist/index.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -16,6 +17,7 @@
     "test:ci": "vitest run --reporter=verbose",
     "test:watch": "vitest",
     "validate-env": "tsx src/scripts/validate-env.ts",
+    "publish-resend-templates": "tsx src/scripts/publish-resend-templates.ts",
     "dev:realtime:smoke": "tsx src/scripts/realtime-smoke-test.ts",
     "dev:realtime:proof": "tsx scripts/realtime-proof.ts"
   },

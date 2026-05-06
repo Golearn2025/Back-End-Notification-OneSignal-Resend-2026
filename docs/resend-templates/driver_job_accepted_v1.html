@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Job confirmed</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#eff6ff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#eff6ff;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;padding:36px 28px;">
+            <tr>
+              <td>
+                <p style="margin:0 0 16px;font-size:18px;font-weight:600;color:#1e3a8a;">Hi {{{driver_first_name}}}</p>
+                <p style="margin:0 0 20px;font-size:16px;line-height:1.6;color:#1e40af;">
+                  Your job <strong>{{{booking_reference}}}</strong> is confirmed.
+                </p>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:15px;color:#1e293b;margin-bottom:20px;">
+                  <tr><td style="padding:6px 0;color:#64748b;">Pickup</td><td style="padding:6px 0;text-align:right;">{{{pickup_address}}}</td></tr>
+                  <tr><td style="padding:6px 0;color:#64748b;">Dropoff</td><td style="padding:6px 0;text-align:right;">{{{dropoff_address}}}</td></tr>
+                  <tr><td style="padding:6px 0;color:#64748b;">Scheduled</td><td style="padding:6px 0;text-align:right;">{{{scheduled_at}}}</td></tr>
+                  <tr><td style="padding:6px 0;color:#64748b;">Passengers / bags</td><td style="padding:6px 0;text-align:right;">{{{passenger_count}}} / {{{bag_count}}}</td></tr>
+                  <tr><td style="padding:6px 0;color:#64748b;">Type</td><td style="padding:6px 0;text-align:right;">{{{booking_type}}}</td></tr>
+                  <tr><td style="padding:6px 0;color:#64748b;">Leg</td><td style="padding:6px 0;text-align:right;">{{{leg_kind}}} {{{leg_number}}}</td></tr>
+                  <tr><td style="padding:6px 0;color:#64748b;">Duration</td><td style="padding:6px 0;text-align:right;">{{{hours_requested}}}h {{{days_requested}}}d</td></tr>
+                  <tr><td style="padding:6px 0;color:#64748b;">Fleet vehicles</td><td style="padding:6px 0;text-align:right;">{{{fleet_total_legs}}}</td></tr>
+                  <tr><td style="padding:6px 0;color:#64748b;">Vehicle</td><td style="padding:6px 0;text-align:right;">{{{vehicle_category_id}}} · {{{vehicle_model_id}}}</td></tr>
+                  <tr><td style="padding:6px 0;color:#64748b;">Payout</td><td style="padding:6px 0;text-align:right;font-weight:600;">{{{driver_payout_display}}}</td></tr>
+                </table>
+                <p style="margin:0;font-size:14px;line-height:1.6;color:#64748b;border-top:1px solid #e2e8f0;padding-top:16px;">
+                  Support: <a href="mailto:{{{support_email}}}" style="color:#2563eb;">{{{support_email}}}</a> · {{{support_phone}}}
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

@@ -1,5 +1,35 @@
 import { z } from 'zod';
 
+/** Resend secret API keys use prefix `re_` (dashboard → API Keys). Empty string → treated as unset. */
+function optionalResendSecretKey(envKey: string) {
+  return z.preprocess(
+    (val) => {
+      if (val === undefined || val === null) {
+        return undefined;
+      }
+      const s = String(val).trim();
+      return s.length === 0 ? undefined : s;
+    },
+    z.union([
+      z.undefined(),
+      z
+        .string()
+        .regex(/^re_[A-Za-z0-9_-]+$/, `${envKey} must be a Resend API secret (prefix re_)`)
+    ])
+  );
+}
+
+const optionalResendFromEmail = z.preprocess(
+  (val) => {
+    if (val === undefined || val === null) {
+      return undefined;
+    }
+    const s = String(val).trim();
+    return s.length === 0 ? undefined : s;
+  },
+  z.union([z.undefined(), z.string().min(1)])
+);
+
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive(),
@@ -11,7 +41,7 @@ export const envSchema = z.object({
   SUPABASE_REALTIME_DISABLE_PROXY: z
     .string()
     .optional()
-    .transform((value) => value !== 'false'),
+    .transform((value) => value === 'true'),
   WORKER_ENABLED: z
     .string()
     .optional()
@@ -28,14 +58,39 @@ export const envSchema = z.object({
   // Optional in Phase 1; real provider sending is not implemented yet.
   ONESIGNAL_APP_ID: z.string().min(1).optional(),
   ONESIGNAL_REST_API_KEY: z.string().min(1).optional(),
-  RESEND_API_KEY: z.string().min(1).optional(),
+  /** Sending transactional email (`POST /emails`). */
+  RESEND_API_KEY: optionalResendSecretKey('RESEND_API_KEY'),
   // Resend supports "Name <email@domain.com>" display form; not a plain RFC email string.
-  RESEND_FROM_EMAIL: z.string().min(1).optional(),
+  RESEND_FROM_EMAIL: optionalResendFromEmail,
+  /**
+   * Optional second key (e.g. restricted “Templates” scope) for `POST /templates` etc.
+   * Independent of `RESEND_API_KEY` / `RESEND_FROM_EMAIL`.
+   */
+  RESEND_TEMPLATE_AUDIT_API_KEY: optionalResendSecretKey('RESEND_TEMPLATE_AUDIT_API_KEY'),
   PUBLIC_WEBSITE_URL: z.string().url().optional()
 });
 
+const envSchemaWithResendPairing = envSchema.superRefine((data, ctx) => {
+  const hasKey = Boolean(data.RESEND_API_KEY);
+  const hasFrom = Boolean(data.RESEND_FROM_EMAIL);
+  if (hasKey && !hasFrom) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'RESEND_FROM_EMAIL is required when RESEND_API_KEY is set',
+      path: ['RESEND_FROM_EMAIL']
+    });
+  }
+  if (hasFrom && !hasKey) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'RESEND_API_KEY is required when RESEND_FROM_EMAIL is set',
+      path: ['RESEND_API_KEY']
+    });
+  }
+});
+
 export function parseEnv(rawEnv: Record<string, string | undefined>) {
-  const parsed = envSchema.safeParse(rawEnv);
+  const parsed = envSchemaWithResendPairing.safeParse(rawEnv);
 
   if (!parsed.success) {
     const formatted = parsed.error.flatten().fieldErrors;
@@ -45,7 +100,7 @@ export function parseEnv(rawEnv: Record<string, string | undefined>) {
   return parsed.data;
 }
 
-export type Env = z.infer<typeof envSchema>;
+export type Env = z.infer<typeof envSchemaWithResendPairing>;
 
 let cachedEnv: Env | null = null;
 
@@ -55,4 +110,9 @@ export function getEnv(): Env {
   }
 
   return cachedEnv;
+}
+
+/** Clears memoized env (Vitest / scripts that mutate process.env between runs). */
+export function resetEnvCacheForTests(): void {
+  cachedEnv = null;
 }

@@ -50,6 +50,17 @@ export async function bootstrapWorker(
     return 'disabled' as const;
   }
 
+  const env = getEnv();
+  deps.logger.info(
+    {
+      realtimeEnabled: deps.realtimeEnabled,
+      realtimeDisableProxy: env.SUPABASE_REALTIME_DISABLE_PROXY,
+      realtimeChannel: deps.realtimeChannel,
+      realtimeAuthSource: env.SUPABASE_REALTIME_KEY ? 'SUPABASE_REALTIME_KEY' : 'SUPABASE_SERVICE_ROLE_KEY'
+    },
+    'Realtime worker configuration'
+  );
+
   const manager = deps.createManager();
   let realtimeListener: { start: () => void; stop: () => Promise<void> } | null = null;
 

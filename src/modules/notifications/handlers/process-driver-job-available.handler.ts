@@ -1,6 +1,8 @@
 import { logger } from '../../../config/logger.js';
+import { getSupabaseAdmin } from '../../../config/supabase.js';
 import { OneSignalProvider } from '../../providers/onesignal.provider.js';
 import { buildDriverPushMessage, formatPayout } from '../driver-push.formatter.js';
+import { loadBookingNotificationContext } from '../booking-notification-context.service.js';
 import { DriverEligibilityService } from '../driver-eligibility.service.js';
 import { asNonEmptyString, nextRetryAtIso } from '../notification-shared.js';
 import type { HandlerDeps } from './handler-deps.js';
@@ -14,10 +16,12 @@ export async function processDriverJobAvailable(
   deps: {
     oneSignal?: OneSignalProvider;
     driverEligibilityService?: DriverEligibilityService;
+    db?: ReturnType<typeof getSupabaseAdmin>;
   } = {}
 ): Promise<void> {
   const oneSignal = deps.oneSignal ?? new OneSignalProvider();
   const driverEligibilityService = deps.driverEligibilityService ?? new DriverEligibilityService();
+  const db = deps.db ?? getSupabaseAdmin();
   const organizationId = event.organization_id;
   const bookingReference = asNonEmptyString(event.payload.booking_reference) ?? 'New booking';
   const vehicleCategoryId = asNonEmptyString(event.payload.vehicle_category_id);
@@ -27,6 +31,33 @@ export async function processDriverJobAvailable(
   const dropoffAddress = asNonEmptyString(event.payload.dropoff_address) ?? '';
   const scheduledAt = asNonEmptyString(event.payload.scheduled_at) ?? '';
   const bookingLegId = asNonEmptyString(event.payload.job_id);
+  const bookingId = asNonEmptyString(event.payload.booking_id);
+
+  const bookingContext =
+    bookingId == null
+      ? {
+          legKind: null,
+          legNumber: null,
+          hoursRequested: null,
+          daysRequested: null,
+          fleetTotalLegs: null
+        }
+      : await loadBookingNotificationContext(db, {
+          organizationId,
+          bookingId,
+          bookingLegId,
+          bookingType
+        });
+
+  // Anti-spam: for fleet we notify only the first leg in the booking.
+  if (bookingType === 'fleet' && bookingContext.legNumber != null && bookingContext.legNumber > 1) {
+    logger.info(
+      { eventId: event.id, bookingLegId, bookingId, legNumber: bookingContext.legNumber },
+      'Skipping fleet leg push to prevent multi-leg notification spam'
+    );
+    await eventsRepository.markEventDelivered(event.id);
+    return;
+  }
 
   let payoutDisplay: string | null = null;
   if (bookingLegId) {
@@ -49,7 +80,12 @@ export async function processDriverJobAvailable(
     scheduledAt,
     vehicleCategoryId,
     vehicleModelId,
-    payoutDisplay
+    payoutDisplay,
+    legKind: bookingContext.legKind,
+    legNumber: bookingContext.legNumber,
+    hoursRequested: bookingContext.hoursRequested,
+    daysRequested: bookingContext.daysRequested,
+    fleetTotalLegs: bookingContext.fleetTotalLegs
   });
   const title = asNonEmptyString(event.payload.push_title) ?? defaultPush.title;
   const message = asNonEmptyString(event.payload.push_message) ?? defaultPush.message;

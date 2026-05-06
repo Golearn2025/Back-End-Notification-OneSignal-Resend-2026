@@ -8,6 +8,7 @@ export const RESEND_TEMPLATE_ID = 'c27ab80b-22ef-4249-a5d1-f78ed1d72f8d';
 export const RESEND_TEMPLATE_ALIAS = 'customer_account_created_v1';
 export const PAYMENT_TEMPLATE_ALIAS = 'payment_success_customer_v1';
 export const JOBS_MAILBOX_TEMPLATE_ALIAS = 'jobs_mailbox_booking_confirmed_v1';
+export const DRIVER_JOB_ACCEPTED_TEMPLATE_ALIAS = 'driver_job_accepted_v1';
 export const JOBS_MAILBOX_ADDRESS = 'newjobs@vantage-lane.com';
 
 export function nextRetryAtIso(): string {

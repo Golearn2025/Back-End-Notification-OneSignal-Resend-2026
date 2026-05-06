@@ -41,7 +41,8 @@ export const loggerOptions: LoggerOptions = {
       '**.payload.provider_token',
       'SUPABASE_SERVICE_ROLE_KEY',
       'ONESIGNAL_REST_API_KEY',
-      'RESEND_API_KEY'
+      'RESEND_API_KEY',
+      'RESEND_TEMPLATE_AUDIT_API_KEY'
     ],
     censor: '[REDACTED]'
   }
