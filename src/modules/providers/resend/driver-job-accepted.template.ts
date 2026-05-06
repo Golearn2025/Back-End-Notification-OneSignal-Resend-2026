@@ -16,6 +16,11 @@ export type SendDriverJobAcceptedEmailInput = {
   bookingType: unknown;
   vehicleCategoryId: unknown;
   vehicleModelId: unknown;
+  legKind: unknown;
+  legNumber: unknown;
+  hoursRequested: unknown;
+  daysRequested: unknown;
+  fleetTotalLegs: unknown;
   /** Sumă numerică fără simbol (ex. 130.00), pentru template cu {{{driver_payout}}}. */
   driverPayoutPence: unknown;
   payoutCurrency: unknown;
@@ -62,6 +67,11 @@ export function buildDriverJobAcceptedTemplateSend(
       booking_type: input.bookingType,
       vehicle_category_id: input.vehicleCategoryId,
       vehicle_model_id: input.vehicleModelId,
+      leg_kind: input.legKind,
+      leg_number: input.legNumber,
+      hours_requested: input.hoursRequested,
+      days_requested: input.daysRequested,
+      fleet_total_legs: input.fleetTotalLegs,
       driver_payout: driverPayout,
       payout_currency: payoutCurrency,
       driver_payout_display: input.driverPayoutDisplay,

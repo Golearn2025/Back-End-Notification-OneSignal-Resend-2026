@@ -8,15 +8,19 @@ import {
   asNonEmptyString,
   nextRetryAtIso
 } from '../notification-shared.js';
+import { loadBookingNotificationContext } from '../booking-notification-context.service.js';
 import { buildDriverJobAcceptedPushMessage, formatPayout } from '../driver-push.formatter.js';
 import type { HandlerDeps } from './handler-deps.js';
 
 type DriverJobAcceptedRow = {
   job_id: string;
+  booking_id: string;
   organization_id: string;
   driver_id: string;
   booking_reference: string | null;
   booking_type: string | null;
+  leg_number: number | null;
+  leg_kind: string | null;
   pickup_address: string | null;
   dropoff_address: string | null;
   scheduled_at: string | null;
@@ -103,6 +107,12 @@ export async function processDriverJobAccepted(
 
   const authRow = driverAuth as { auth_user_id?: string | null } | null;
   const authUserId = asNonEmptyString(authRow?.auth_user_id ?? undefined);
+  const bookingContext = await loadBookingNotificationContext(db, {
+    organizationId: v.organization_id,
+    bookingId: v.booking_id,
+    bookingLegId: v.job_id,
+    bookingType: v.booking_type
+  });
 
   let emailAttempted = false;
   let emailOk = false;
@@ -146,6 +156,16 @@ export async function processDriverJobAccepted(
         bookingType: v.booking_type != null ? String(v.booking_type) : '',
         vehicleCategoryId: asNonEmptyString(v.vehicle_category_id) ?? '',
         vehicleModelId: asNonEmptyString(v.vehicle_model_id) ?? '',
+        legKind: bookingContext.legKind ?? asNonEmptyString(v.leg_kind) ?? '',
+        legNumber:
+          typeof bookingContext.legNumber === 'number'
+            ? bookingContext.legNumber
+            : typeof v.leg_number === 'number'
+              ? v.leg_number
+              : null,
+        hoursRequested: bookingContext.hoursRequested,
+        daysRequested: bookingContext.daysRequested,
+        fleetTotalLegs: bookingContext.fleetTotalLegs,
         driverPayoutPence: typeof v.driver_payout_pence === 'number' ? v.driver_payout_pence : null,
         payoutCurrency: asNonEmptyString(v.payout_currency) ?? 'GBP',
         driverPayoutDisplay: payoutDisplay ?? '—',
@@ -183,7 +203,17 @@ export async function processDriverJobAccepted(
       scheduledAt: v.scheduled_at,
       vehicleCategoryId: asNonEmptyString(v.vehicle_category_id),
       vehicleModelId: asNonEmptyString(v.vehicle_model_id),
-      payoutDisplay
+      payoutDisplay,
+      legKind: bookingContext.legKind ?? asNonEmptyString(v.leg_kind),
+      legNumber:
+        typeof bookingContext.legNumber === 'number'
+          ? bookingContext.legNumber
+          : typeof v.leg_number === 'number'
+            ? v.leg_number
+            : null,
+      hoursRequested: bookingContext.hoursRequested,
+      daysRequested: bookingContext.daysRequested,
+      fleetTotalLegs: bookingContext.fleetTotalLegs
     };
     const { title, message } = buildDriverJobAcceptedPushMessage(pushInput);
 

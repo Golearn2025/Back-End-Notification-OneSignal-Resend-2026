@@ -43,6 +43,16 @@ Dacă vreți totuși să împingă HTML din Git către API:
 
 Subiectul și `reply_to` pot fi suprascrise de la API (așa face deja `ResendProvider`).
 
+### Variabile noi recomandate pentru `driver_job_accepted_v1`
+
+Pentru acoperire completă pe `return` / `hourly` / `daily` / `fleet`, template-ul poate folosi și:
+
+- `{{{leg_kind}}}`
+- `{{{leg_number}}}`
+- `{{{hours_requested}}}`
+- `{{{days_requested}}}`
+- `{{{fleet_total_legs}}}`
+
 ## Pași în dashboard Resend
 
 1. **Templates** → **Create template**.

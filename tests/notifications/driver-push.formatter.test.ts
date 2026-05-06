@@ -59,4 +59,39 @@ describe('driver-push.formatter', () => {
     expect(accepted.title).toContain('£10.00');
     expect(accepted.message).toBe(available.message);
   });
+
+  it('adds duration line for hourly bookings', () => {
+    const result = buildDriverPushMessage({
+      bookingReference: 'CB-HOURLY-1',
+      bookingType: 'hourly',
+      pickupAddress: 'LHR Terminal 2',
+      dropoffAddress: '',
+      scheduledAt: '2026-05-05T12:00:00Z',
+      vehicleCategoryId: 'executive',
+      vehicleModelId: 'mercedes-e-class',
+      payoutDisplay: '£220.00',
+      hoursRequested: 4
+    });
+
+    expect(result.message).toContain('Duration: 4 hours');
+    expect(result.message).toContain('Trip: Hourly');
+  });
+
+  it('adds fleet summary line when fleet total legs is known', () => {
+    const result = buildDriverPushMessage({
+      bookingReference: 'CB-FLEET-1',
+      bookingType: 'fleet',
+      pickupAddress: 'Gatwick',
+      dropoffAddress: 'Chelsea',
+      scheduledAt: '2026-05-05T12:00:00Z',
+      vehicleCategoryId: 'luxury',
+      vehicleModelId: 'mercedes-s-class',
+      payoutDisplay: null,
+      legNumber: 1,
+      fleetTotalLegs: 20
+    });
+
+    expect(result.message).toContain('Fleet dispatch: 20 vehicles');
+    expect(result.message).toContain('Trip: Fleet');
+  });
 });

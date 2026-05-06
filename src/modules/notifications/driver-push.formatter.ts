@@ -9,6 +9,11 @@ export type DriverPushMessageInput = {
   vehicleCategoryId: string | null;
   vehicleModelId: string | null;
   payoutDisplay: string | null;
+  legKind?: string | null;
+  legNumber?: number | null;
+  hoursRequested?: number | null;
+  daysRequested?: number | null;
+  fleetTotalLegs?: number | null;
 };
 
 export function formatDriverPushDateTime(value: string | null): string | null {
@@ -68,12 +73,50 @@ export function formatPayout(pence: number | null, currency: string | null): str
   return `${code} ${amount}`;
 }
 
+function formatTripType(value: string | null): string | null {
+  const displayBookingTypeRaw = formatDisplayToken(value);
+  if (displayBookingTypeRaw?.toLowerCase() === 'oneway') {
+    return 'One way';
+  }
+  return displayBookingTypeRaw;
+}
+
+function buildTripDetailLine(input: DriverPushMessageInput): string | null {
+  const tripType = formatTripType(input.bookingType);
+  const legLabel =
+    input.legKind?.toLowerCase() === 'return'
+      ? 'Return leg'
+      : input.legNumber && input.legNumber > 1
+        ? `Leg ${input.legNumber}`
+        : null;
+
+  if (!tripType && !legLabel) {
+    return null;
+  }
+  if (tripType && legLabel) {
+    return `Trip: ${tripType} (${legLabel})`;
+  }
+  return `Trip: ${tripType ?? legLabel}`;
+}
+
+function buildDurationLine(input: DriverPushMessageInput): string | null {
+  if (input.bookingType === 'hourly' && input.hoursRequested && input.hoursRequested > 0) {
+    return `Duration: ${input.hoursRequested} hour${input.hoursRequested > 1 ? 's' : ''}`;
+  }
+  if (input.bookingType === 'daily' && input.daysRequested && input.daysRequested > 0) {
+    return `Duration: ${input.daysRequested} day${input.daysRequested > 1 ? 's' : ''}`;
+  }
+  if (input.bookingType === 'fleet' && input.fleetTotalLegs && input.fleetTotalLegs > 1) {
+    return `Fleet dispatch: ${input.fleetTotalLegs} vehicles`;
+  }
+  return null;
+}
+
 export function buildDriverPushMessage(input: DriverPushMessageInput): { title: string; message: string } {
   const displayCategory = formatDisplayToken(input.vehicleCategoryId);
   const displayModel = formatDisplayToken(input.vehicleModelId);
-  const displayBookingTypeRaw = formatDisplayToken(input.bookingType);
-  const displayBookingType =
-    displayBookingTypeRaw?.toLowerCase() === 'oneway' ? 'One way' : displayBookingTypeRaw;
+  const tripLine = buildTripDetailLine(input);
+  const durationLine = buildDurationLine(input);
   const displayWhen = formatDriverPushDateTime(input.scheduledAt) ?? input.scheduledAt ?? '';
   const titleWhen = formatDriverPushDateTimeShort(input.scheduledAt);
   const pickupPostcode = getUkPostcode(input.pickupAddress);
@@ -95,7 +138,8 @@ export function buildDriverPushMessage(input: DriverPushMessageInput): { title: 
       ? `🔴 Drop-off: ${dropoffDisplay}${dropoffPostcode ? ` (${dropoffPostcode})` : ''}`
       : null,
     displayWhen ? `When: ${displayWhen}` : null,
-    displayBookingType ? `Trip: ${displayBookingType}` : null,
+    tripLine,
+    durationLine,
     displayCategory || displayModel
       ? `Vehicle: ${[displayCategory, displayModel].filter((token) => token).join(' / ')}`
       : null,
