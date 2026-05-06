@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-/** Resend secret API keys use prefix `re_` (dashboard → API Keys). Empty string → treated as unset. */
+/** Resend API keys: accept any non-empty string after trim. Empty string → treated as unset. */
 function optionalResendSecretKey(envKey: string) {
   return z.preprocess(
     (val) => {
@@ -12,9 +12,7 @@ function optionalResendSecretKey(envKey: string) {
     },
     z.union([
       z.undefined(),
-      z
-        .string()
-        .regex(/^re_[A-Za-z0-9_-]+$/, `${envKey} must be a Resend API secret (prefix re_)`)
+      z.string().min(1, `${envKey} must be a non-empty string`)
     ])
   );
 }
