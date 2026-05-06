@@ -3,9 +3,8 @@ services:
     name: backend-notifications-api
     runtime: node
     plan: starter
-    rootDir: backend-notifications
     buildCommand: npm ci && npm run build
-    startCommand: node dist/index.js
+    startCommand: node dist/src/index.js
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
@@ -35,9 +34,8 @@ services:
     name: backend-notifications-worker
     runtime: node
     plan: starter
-    rootDir: backend-notifications
     buildCommand: npm ci && npm run build
-    startCommand: env -u SUPABASE_REALTIME_KEY node dist/worker.js
+    startCommand: env -u SUPABASE_REALTIME_KEY node dist/src/worker.js
     envVars:
       - key: NODE_ENV
         value: production
