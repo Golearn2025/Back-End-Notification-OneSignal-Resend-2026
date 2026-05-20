@@ -5,6 +5,7 @@ export type SendOneSignalExternalUserPushInput = {
   externalUserId: string;
   title: string;
   message: string;
+  data?: Record<string, string>;
 };
 
 export type SendOneSignalExternalUserPushResult = {
@@ -27,21 +28,27 @@ export class OneSignalProvider {
       throw new Error('OneSignal config missing: ONESIGNAL_APP_ID or ONESIGNAL_REST_API_KEY');
     }
 
+    const body: Record<string, unknown> = {
+      app_id: appId,
+      include_aliases: {
+        external_id: [input.externalUserId]
+      },
+      target_channel: 'push',
+      headings: { en: input.title },
+      contents: { en: input.message }
+    };
+
+    if (input.data && Object.keys(input.data).length > 0) {
+      body.data = input.data;
+    }
+
     const response = await fetch('https://onesignal.com/api/v1/notifications', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Basic ${restApiKey}`
       },
-      body: JSON.stringify({
-        app_id: appId,
-        include_aliases: {
-          external_id: [input.externalUserId]
-        },
-        target_channel: 'push',
-        headings: { en: input.title },
-        contents: { en: input.message }
-      })
+      body: JSON.stringify(body)
     });
 
     const payload = (await response.json()) as {

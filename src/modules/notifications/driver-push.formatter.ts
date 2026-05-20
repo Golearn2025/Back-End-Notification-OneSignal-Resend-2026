@@ -9,6 +9,10 @@ export type DriverPushMessageInput = {
   vehicleCategoryId: string | null;
   vehicleModelId: string | null;
   payoutDisplay: string | null;
+  payoutBreakdownLine?: string | null;
+  distanceMiles?: number | string | null;
+  durationMin?: number | null;
+  stopsCount?: number | null;
   legKind?: string | null;
   legNumber?: number | null;
   hoursRequested?: number | null;
@@ -51,14 +55,26 @@ function formatDriverPushDateTimeShort(value: string | null): string | null {
   });
 }
 
-function getShortAddress(address: string): string {
-  const primary = address.split(',')[0]?.trim() ?? '';
-  return primary.length > 0 ? primary : address;
+function formatLocationLine(address: string): string {
+  const trimmed = address.trim();
+  if (trimmed.includes('•')) {
+    return trimmed;
+  }
+  const primary = trimmed.split(',')[0]?.trim() ?? '';
+  return primary.length > 0 ? primary : trimmed;
 }
 
-function getUkPostcode(address: string): string | null {
-  const match = address.match(/\b[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}\b/i);
-  return match?.[0]?.toUpperCase() ?? null;
+/** Payout șofer rotunjit la liră întreagă — ca JobCard în app. */
+export function formatDriverPayoutWholePence(pence: number | null, currency: string | null): string | null {
+  if (typeof pence !== 'number' || Number.isNaN(pence) || pence <= 0) {
+    return null;
+  }
+  const pounds = Math.round(pence / 100);
+  const code = asNonEmptyString(currency)?.toUpperCase() ?? 'GBP';
+  if (code === 'GBP') {
+    return `£${pounds}`;
+  }
+  return `${code} ${pounds}`;
 }
 
 export function formatPayout(pence: number | null, currency: string | null): string | null {
@@ -94,9 +110,9 @@ function buildTripDetailLine(input: DriverPushMessageInput): string | null {
     return null;
   }
   if (tripType && legLabel) {
-    return `Trip: ${tripType} (${legLabel})`;
+    return `${tripType} (${legLabel})`;
   }
-  return `Trip: ${tripType ?? legLabel}`;
+  return tripType ?? legLabel;
 }
 
 function buildDurationLine(input: DriverPushMessageInput): string | null {
@@ -112,17 +128,59 @@ function buildDurationLine(input: DriverPushMessageInput): string | null {
   return null;
 }
 
+function parseDistanceMiles(value: number | string | null | undefined): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
+}
+
+function buildMetricsLine(input: DriverPushMessageInput): string | null {
+  const miles = parseDistanceMiles(input.distanceMiles);
+  const duration =
+    typeof input.durationMin === 'number' && Number.isFinite(input.durationMin) && input.durationMin > 0
+      ? input.durationMin
+      : null;
+  const stops =
+    typeof input.stopsCount === 'number' && Number.isFinite(input.stopsCount) && input.stopsCount >= 0
+      ? input.stopsCount
+      : null;
+
+  if (miles == null && duration == null && stops == null) {
+    return null;
+  }
+
+  const parts: string[] = [];
+  if (miles != null) {
+    const miLabel = Number.isInteger(miles) ? String(miles) : miles.toFixed(2).replace(/\.?0+$/, '');
+    parts.push(`${miLabel} mi`);
+  }
+  if (duration != null) {
+    parts.push(`${duration} min`);
+  }
+  if (stops != null) {
+    parts.push(`${stops} stop${stops === 1 ? '' : 's'}`);
+  }
+  return parts.join(' · ');
+}
+
 export function buildDriverPushMessage(input: DriverPushMessageInput): { title: string; message: string } {
   const displayCategory = formatDisplayToken(input.vehicleCategoryId);
   const displayModel = formatDisplayToken(input.vehicleModelId);
   const tripLine = buildTripDetailLine(input);
   const durationLine = buildDurationLine(input);
-  const displayWhen = formatDriverPushDateTime(input.scheduledAt) ?? input.scheduledAt ?? '';
+  const metricsLine = buildMetricsLine(input);
   const titleWhen = formatDriverPushDateTimeShort(input.scheduledAt);
-  const pickupPostcode = getUkPostcode(input.pickupAddress);
-  const dropoffPostcode = getUkPostcode(input.dropoffAddress);
-  const pickupDisplay = getShortAddress(input.pickupAddress);
-  const dropoffDisplay = getShortAddress(input.dropoffAddress);
+  const pickupLine = input.pickupAddress ? formatLocationLine(input.pickupAddress) : null;
+  const dropoffLine = input.dropoffAddress ? formatLocationLine(input.dropoffAddress) : null;
+
+  const headerLine = tripLine
+    ? `${input.bookingReference} · ${tripLine}`
+    : input.bookingReference;
 
   const defaultTitleParts = ['New job'];
   if (input.payoutDisplay) {
@@ -133,17 +191,15 @@ export function buildDriverPushMessage(input: DriverPushMessageInput): { title: 
   }
 
   const formattedSections = [
-    input.pickupAddress ? `🟢 Pickup: ${pickupDisplay}${pickupPostcode ? ` (${pickupPostcode})` : ''}` : null,
-    input.dropoffAddress
-      ? `🔴 Drop-off: ${dropoffDisplay}${dropoffPostcode ? ` (${dropoffPostcode})` : ''}`
-      : null,
-    displayWhen ? `When: ${displayWhen}` : null,
-    tripLine,
+    headerLine,
+    pickupLine ? `🟢 ${pickupLine}` : null,
+    dropoffLine ? `🔴 ${dropoffLine}` : null,
+    metricsLine,
+    input.payoutBreakdownLine,
     durationLine,
     displayCategory || displayModel
-      ? `Vehicle: ${[displayCategory, displayModel].filter((token) => token).join(' / ')}`
-      : null,
-    `Reference: ${input.bookingReference}`
+      ? `${[displayCategory, displayModel].filter((token) => token).join(' · ')}`
+      : null
   ].filter((value): value is string => value !== null);
 
   return {

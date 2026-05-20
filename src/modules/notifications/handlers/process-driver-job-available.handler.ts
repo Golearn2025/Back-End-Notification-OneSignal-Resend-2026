@@ -1,11 +1,34 @@
 import { logger } from '../../../config/logger.js';
 import { getSupabaseAdmin } from '../../../config/supabase.js';
 import { OneSignalProvider } from '../../providers/onesignal.provider.js';
-import { buildDriverPushMessage, formatPayout } from '../driver-push.formatter.js';
+import {
+  buildDriverPushMessage,
+  formatDriverPayoutWholePence,
+  formatPayout
+} from '../driver-push.formatter.js';
 import { loadBookingNotificationContext } from '../booking-notification-context.service.js';
 import { DriverEligibilityService } from '../driver-eligibility.service.js';
 import { asNonEmptyString, nextRetryAtIso } from '../notification-shared.js';
 import type { HandlerDeps } from './handler-deps.js';
+
+function asPence(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function asInt(value: unknown): number | null {
+  const pence = asPence(value);
+  if (pence == null) {
+    return null;
+  }
+  return Math.trunc(pence);
+}
 
 export async function processDriverJobAvailable(
   {
@@ -27,11 +50,18 @@ export async function processDriverJobAvailable(
   const vehicleCategoryId = asNonEmptyString(event.payload.vehicle_category_id);
   const vehicleModelId = asNonEmptyString(event.payload.vehicle_model_id);
   const bookingType = asNonEmptyString(event.payload.booking_type);
-  const pickupAddress = asNonEmptyString(event.payload.pickup_address) ?? '';
-  const dropoffAddress = asNonEmptyString(event.payload.dropoff_address) ?? '';
+  const pickupAddress =
+    asNonEmptyString(event.payload.pickup_preview) ??
+    asNonEmptyString(event.payload.pickup_address) ??
+    '';
+  const dropoffAddress =
+    asNonEmptyString(event.payload.dropoff_preview) ??
+    asNonEmptyString(event.payload.dropoff_address) ??
+    '';
   const scheduledAt = asNonEmptyString(event.payload.scheduled_at) ?? '';
   const bookingLegId = asNonEmptyString(event.payload.job_id);
   const bookingId = asNonEmptyString(event.payload.booking_id);
+  const payoutCurrency = asNonEmptyString(event.payload.payout_currency) ?? 'GBP';
 
   const bookingContext =
     bookingId == null
@@ -59,11 +89,29 @@ export async function processDriverJobAvailable(
     return;
   }
 
+  const totalPence = asInt(event.payload.driver_total_pence);
+  const basePence = asInt(event.payload.driver_payout_pence);
+  const extrasPence = asInt(event.payload.paid_extras_pence) ?? 0;
+
   let payoutDisplay: string | null = null;
-  if (bookingLegId) {
+  let payoutBreakdownLine: string | null = null;
+
+  if (totalPence != null && totalPence > 0) {
+    payoutDisplay = formatDriverPayoutWholePence(totalPence, payoutCurrency);
+    if (extrasPence > 0 && basePence != null && basePence > 0) {
+      const baseDisplay = formatDriverPayoutWholePence(basePence, payoutCurrency);
+      const extrasDisplay = formatDriverPayoutWholePence(extrasPence, payoutCurrency);
+      if (baseDisplay && extrasDisplay) {
+        payoutBreakdownLine = `${baseDisplay} + ${extrasDisplay} extras`;
+      }
+    }
+  } else if (bookingLegId) {
     try {
       const financial = await driverEligibilityService.getLatestLegFinancial({ bookingLegId });
-      payoutDisplay = formatPayout(financial.driverPayoutPence, financial.currency);
+      payoutDisplay = formatDriverPayoutWholePence(financial.driverPayoutPence, financial.currency);
+      if (!payoutDisplay) {
+        payoutDisplay = formatPayout(financial.driverPayoutPence, financial.currency);
+      }
     } catch (error) {
       logger.warn(
         { eventId: event.id, error: error instanceof Error ? error.message : 'unknown error' },
@@ -81,6 +129,10 @@ export async function processDriverJobAvailable(
     vehicleCategoryId,
     vehicleModelId,
     payoutDisplay,
+    payoutBreakdownLine,
+    distanceMiles: event.payload.distance_miles as number | string | null | undefined,
+    durationMin: asInt(event.payload.duration_min),
+    stopsCount: asInt(event.payload.stops_count),
     legKind: bookingContext.legKind,
     legNumber: bookingContext.legNumber,
     hoursRequested: bookingContext.hoursRequested,
@@ -122,6 +174,16 @@ export async function processDriverJobAvailable(
     return;
   }
 
+  const pushData: Record<string, string> = {
+    event_type: 'driver_job_available'
+  };
+  if (bookingLegId) {
+    pushData.job_id = bookingLegId;
+  }
+  if (bookingReference) {
+    pushData.booking_reference = bookingReference;
+  }
+
   let successCount = 0;
   let failCount = 0;
 
@@ -156,7 +218,8 @@ export async function processDriverJobAvailable(
       const { providerMessageId, responseMetadata } = await oneSignal.sendPushToExternalUserId({
         externalUserId: driver.authUserId,
         title,
-        message
+        message,
+        data: pushData
       });
       await deliveriesRepository.markDeliveryProviderAccepted(delivery.id, providerMessageId, {
         provider: 'onesignal',
