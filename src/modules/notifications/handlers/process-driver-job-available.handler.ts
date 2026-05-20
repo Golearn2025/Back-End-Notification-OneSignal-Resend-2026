@@ -3,8 +3,10 @@ import { getSupabaseAdmin } from '../../../config/supabase.js';
 import { OneSignalProvider } from '../../providers/onesignal.provider.js';
 import {
   buildDriverPushMessage,
+  determineJobUrgency,
   formatDriverPayoutWholePence,
-  formatPayout
+  formatPayout,
+  type JobUrgency
 } from '../driver-push.formatter.js';
 import { loadBookingNotificationContext } from '../booking-notification-context.service.js';
 import { DriverEligibilityService } from '../driver-eligibility.service.js';
@@ -133,6 +135,10 @@ export async function processDriverJobAvailable(
     }
   }
 
+  const urgencyRaw = asNonEmptyString(event.payload.job_urgency);
+  const urgency: JobUrgency | null =
+    urgencyRaw === 'ASAP' || urgencyRaw === 'Pre-Book' ? urgencyRaw : determineJobUrgency(scheduledAt);
+
   const defaultPush = buildDriverPushMessage({
     bookingReference,
     bookingType,
@@ -146,6 +152,10 @@ export async function processDriverJobAvailable(
     distanceMiles: asDistanceMiles(event.payload.distance_miles),
     durationMin: asInt(event.payload.duration_min),
     stopsCount: asInt(event.payload.stops_count),
+    passengerCount: asInt(event.payload.passenger_count),
+    bagCount: asInt(event.payload.bag_count),
+    urgency,
+    returnScheduledAt: asNonEmptyString(event.payload.partner_leg_scheduled_at),
     legKind: bookingContext.legKind,
     legNumber: bookingContext.legNumber,
     hoursRequested: bookingContext.hoursRequested,
