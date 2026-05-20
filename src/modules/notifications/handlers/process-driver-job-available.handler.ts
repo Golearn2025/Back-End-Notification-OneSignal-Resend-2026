@@ -30,6 +30,19 @@ function asInt(value: unknown): number | null {
   return Math.trunc(pence);
 }
 
+function asDistanceMiles(value: unknown): number | string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim();
+  }
+  return null;
+}
+
 export async function processDriverJobAvailable(
   {
     event,
@@ -130,7 +143,7 @@ export async function processDriverJobAvailable(
     vehicleModelId,
     payoutDisplay,
     payoutBreakdownLine,
-    distanceMiles: event.payload.distance_miles as number | string | null | undefined,
+    distanceMiles: asDistanceMiles(event.payload.distance_miles),
     durationMin: asInt(event.payload.duration_min),
     stopsCount: asInt(event.payload.stops_count),
     legKind: bookingContext.legKind,

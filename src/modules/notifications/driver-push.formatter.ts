@@ -9,15 +9,15 @@ export type DriverPushMessageInput = {
   vehicleCategoryId: string | null;
   vehicleModelId: string | null;
   payoutDisplay: string | null;
-  payoutBreakdownLine?: string | null;
-  distanceMiles?: number | string | null;
-  durationMin?: number | null;
-  stopsCount?: number | null;
-  legKind?: string | null;
-  legNumber?: number | null;
-  hoursRequested?: number | null;
-  daysRequested?: number | null;
-  fleetTotalLegs?: number | null;
+  payoutBreakdownLine?: string | null | undefined;
+  distanceMiles?: number | string | null | undefined;
+  durationMin?: number | null | undefined;
+  stopsCount?: number | null | undefined;
+  legKind?: string | null | undefined;
+  legNumber?: number | null | undefined;
+  hoursRequested?: number | null | undefined;
+  daysRequested?: number | null | undefined;
+  fleetTotalLegs?: number | null | undefined;
 };
 
 export function formatDriverPushDateTime(value: string | null): string | null {
