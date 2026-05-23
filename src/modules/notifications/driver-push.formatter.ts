@@ -258,7 +258,7 @@ export function buildDriverPushMessage(
   const bookingType = input.bookingType?.toLowerCase() ?? 'oneway';
   const showDropoff = dropoffLine && bookingType !== 'hourly';
 
-  const defaultTitleParts = [options?.titleLabel ?? 'New job'];
+  const defaultTitleParts: string[] = [options?.titleLabel ?? 'New job'];
   if (input.payoutDisplay) {
     defaultTitleParts.push(input.payoutDisplay);
   }
