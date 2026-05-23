@@ -245,7 +245,12 @@ function buildReturnTimeLine(returnScheduledAt: string | null | undefined): stri
   return formatted ? `Return: ${formatted}` : null;
 }
 
-export function buildDriverPushMessage(input: DriverPushMessageInput): { title: string; message: string } {
+export type DriverPushTitleLabel = 'New job' | 'Job accepted';
+
+export function buildDriverPushMessage(
+  input: DriverPushMessageInput,
+  options?: { titleLabel?: DriverPushTitleLabel }
+): { title: string; message: string } {
   const whenLine = formatJobCardDateTime(input.scheduledAt);
   const titleWhen = formatDriverPushDateTimeShort(input.scheduledAt);
   const pickupLine = input.pickupAddress ? formatLocationLine(input.pickupAddress) : null;
@@ -253,7 +258,7 @@ export function buildDriverPushMessage(input: DriverPushMessageInput): { title: 
   const bookingType = input.bookingType?.toLowerCase() ?? 'oneway';
   const showDropoff = dropoffLine && bookingType !== 'hourly';
 
-  const defaultTitleParts = ['New job'];
+  const defaultTitleParts = [options?.titleLabel ?? 'New job'];
   if (input.payoutDisplay) {
     defaultTitleParts.push(input.payoutDisplay);
   }
@@ -284,17 +289,9 @@ export function buildDriverPushMessage(input: DriverPushMessageInput): { title: 
   };
 }
 
+/** Same layout/body as New Job push — only the title label changes to "Job accepted". */
 export function buildDriverJobAcceptedPushMessage(
-  input: DriverPushMessageInput,
-  options?: { titleOverride?: string | null }
+  input: DriverPushMessageInput
 ): { title: string; message: string } {
-  const { message } = buildDriverPushMessage(input);
-  if (options?.titleOverride) {
-    return { title: options.titleOverride, message };
-  }
-  const payoutPart = input.payoutDisplay ? ` • ${input.payoutDisplay}` : '';
-  return {
-    title: `Job accepted • ${input.bookingReference}${payoutPart}`,
-    message
-  };
+  return buildDriverPushMessage(input, { titleLabel: 'Job accepted' });
 }

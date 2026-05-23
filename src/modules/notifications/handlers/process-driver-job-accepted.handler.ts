@@ -11,7 +11,9 @@ import {
 import { loadBookingNotificationContext } from '../booking-notification-context.service.js';
 import {
   buildDriverJobAcceptedPushMessage,
-  formatDriverPayoutWholePence
+  determineJobUrgency,
+  formatDriverPayoutWholePence,
+  type JobUrgency
 } from '../driver-push.formatter.js';
 import type { HandlerDeps } from './handler-deps.js';
 
@@ -31,6 +33,8 @@ type DriverJobAcceptedRow = {
   bag_count: number | null;
   vehicle_category_id: string | null;
   vehicle_model_id: string | null;
+  distance_miles: number | string | null;
+  duration_min: number | null;
   driver_payout_pence: number | null;
   payout_currency: string | null;
   driver_first_name: string | null;
@@ -55,6 +59,26 @@ function asInt(value: unknown): number | null {
     return null;
   }
   return Math.trunc(pence);
+}
+
+function asDistanceMiles(value: unknown): number | string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim();
+  }
+  return null;
+}
+
+function stopsCountFromStopsRaw(stopsRaw: unknown): number {
+  if (!Array.isArray(stopsRaw)) {
+    return 0;
+  }
+  return stopsRaw.length;
 }
 
 /**
@@ -264,16 +288,59 @@ export async function processDriverJobAccepted(
 
   if (authUserId) {
     pushAttempted = true;
+
+    const { data: legRow } = await db
+      .from('booking_legs')
+      .select('distance_miles, duration_min, stops_raw, scheduled_at')
+      .eq('id', jobId)
+      .eq('organization_id', event.organization_id)
+      .maybeSingle();
+
+    const leg = legRow as {
+      distance_miles?: number | string | null;
+      duration_min?: number | null;
+      stops_raw?: unknown;
+      scheduled_at?: string | null;
+    } | null;
+
+    const scheduledAt =
+      asNonEmptyString(payload.scheduled_at) ?? leg?.scheduled_at ?? v.scheduled_at;
+    const bookingType =
+      asNonEmptyString(payload.booking_type) ??
+      (v.booking_type != null ? String(v.booking_type) : null);
+
+    const urgencyRaw = asNonEmptyString(payload.job_urgency);
+    const urgency: JobUrgency | null =
+      urgencyRaw === 'ASAP' || urgencyRaw === 'Pre-Book'
+        ? urgencyRaw
+        : determineJobUrgency(scheduledAt);
+
     const pushInput = {
       bookingReference,
-      bookingType: v.booking_type != null ? String(v.booking_type) : null,
+      bookingType,
       pickupAddress,
       dropoffAddress,
-      scheduledAt: v.scheduled_at,
-      vehicleCategoryId: asNonEmptyString(v.vehicle_category_id),
-      vehicleModelId: asNonEmptyString(v.vehicle_model_id),
+      scheduledAt,
+      vehicleCategoryId:
+        asNonEmptyString(payload.vehicle_category_id) ?? asNonEmptyString(v.vehicle_category_id),
+      vehicleModelId:
+        asNonEmptyString(payload.vehicle_model_id) ?? asNonEmptyString(v.vehicle_model_id),
       payoutDisplay: settlement.payoutDisplay,
       payoutBreakdownLine: settlement.payoutBreakdownLine,
+      distanceMiles:
+        asDistanceMiles(payload.distance_miles) ??
+        asDistanceMiles(leg?.distance_miles) ??
+        asDistanceMiles(v.distance_miles),
+      durationMin:
+        asInt(payload.duration_min) ?? leg?.duration_min ?? v.duration_min ?? null,
+      stopsCount:
+        asInt(payload.stops_count) ??
+        (leg?.stops_raw != null ? stopsCountFromStopsRaw(leg.stops_raw) : null),
+      passengerCount:
+        asInt(payload.passenger_count) ?? v.passenger_count ?? null,
+      bagCount: asInt(payload.bag_count) ?? v.bag_count ?? null,
+      urgency,
+      returnScheduledAt: asNonEmptyString(payload.partner_leg_scheduled_at),
       legKind: bookingContext.legKind ?? asNonEmptyString(v.leg_kind),
       legNumber:
         typeof bookingContext.legNumber === 'number'
@@ -286,13 +353,7 @@ export async function processDriverJobAccepted(
       fleetTotalLegs: bookingContext.fleetTotalLegs
     };
 
-    const pushTitleFromPayload = asNonEmptyString(payload.push_title);
-    const pushBodyFromPayload = asNonEmptyString(payload.push_body);
-    const defaultPush = buildDriverJobAcceptedPushMessage(pushInput, {
-      titleOverride: pushTitleFromPayload
-    });
-    const title = pushTitleFromPayload ?? defaultPush.title;
-    const message = pushBodyFromPayload ?? defaultPush.message;
+    const { title, message } = buildDriverJobAcceptedPushMessage(pushInput);
 
     const pushDelivery = await deliveriesRepository.createDelivery({
       organization_id: event.organization_id,
