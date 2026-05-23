@@ -284,11 +284,17 @@ export function buildDriverPushMessage(input: DriverPushMessageInput): { title: 
   };
 }
 
-export function buildDriverJobAcceptedPushMessage(input: DriverPushMessageInput): { title: string; message: string } {
+export function buildDriverJobAcceptedPushMessage(
+  input: DriverPushMessageInput,
+  options?: { titleOverride?: string | null }
+): { title: string; message: string } {
   const { message } = buildDriverPushMessage(input);
+  if (options?.titleOverride) {
+    return { title: options.titleOverride, message };
+  }
   const payoutPart = input.payoutDisplay ? ` • ${input.payoutDisplay}` : '';
   return {
-    title: `Job confirmed • ${input.bookingReference}${payoutPart}`,
+    title: `Job accepted • ${input.bookingReference}${payoutPart}`,
     message
   };
 }

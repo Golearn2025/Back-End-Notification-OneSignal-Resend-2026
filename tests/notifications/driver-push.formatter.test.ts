@@ -70,7 +70,7 @@ describe('driver-push.formatter', () => {
     expect(result.message.trimEnd().endsWith('CB-000674')).toBe(true);
   });
 
-  it('buildDriverJobAcceptedPushMessage uses Job confirmed title', () => {
+  it('buildDriverJobAcceptedPushMessage uses Job accepted title with whole-pound payout', () => {
     const accepted = buildDriverJobAcceptedPushMessage({
       bookingReference: 'CB-1',
       bookingType: 'oneway',
@@ -79,11 +79,29 @@ describe('driver-push.formatter', () => {
       scheduledAt: '2026-05-05T12:00:00Z',
       vehicleCategoryId: 'exec',
       vehicleModelId: null,
-      payoutDisplay: '£10',
+      payoutDisplay: '£141',
       urgency: 'ASAP'
     });
-    expect(accepted.title).toMatch(/^Job confirmed/);
+    expect(accepted.title).toBe('Job accepted • CB-1 • £141');
     expect(accepted.message.trimEnd().endsWith('CB-1')).toBe(true);
+  });
+
+  it('buildDriverJobAcceptedPushMessage respects payload push_title override', () => {
+    const accepted = buildDriverJobAcceptedPushMessage(
+      {
+        bookingReference: 'CB-1',
+        bookingType: 'oneway',
+        pickupAddress: 'A',
+        dropoffAddress: 'B',
+        scheduledAt: '2026-05-05T12:00:00Z',
+        vehicleCategoryId: 'exec',
+        vehicleModelId: null,
+        payoutDisplay: '£141',
+        urgency: 'ASAP'
+      },
+      { titleOverride: 'Job accepted • £141' }
+    );
+    expect(accepted.title).toBe('Job accepted • £141');
   });
 
   it('hourly: no miles line, shows hours booked', () => {

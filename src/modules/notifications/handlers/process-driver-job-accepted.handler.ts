@@ -9,7 +9,10 @@ import {
   nextRetryAtIso
 } from '../notification-shared.js';
 import { loadBookingNotificationContext } from '../booking-notification-context.service.js';
-import { buildDriverJobAcceptedPushMessage, formatPayout } from '../driver-push.formatter.js';
+import {
+  buildDriverJobAcceptedPushMessage,
+  formatDriverPayoutWholePence
+} from '../driver-push.formatter.js';
 import type { HandlerDeps } from './handler-deps.js';
 
 type DriverJobAcceptedRow = {
@@ -35,17 +38,73 @@ type DriverJobAcceptedRow = {
   driver_email: string | null;
 };
 
+function asPence(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function asInt(value: unknown): number | null {
+  const pence = asPence(value);
+  if (pence == null) {
+    return null;
+  }
+  return Math.trunc(pence);
+}
+
+/**
+ * Immutable settlement display from notification_events.payload (enqueue after snapshot).
+ * Do NOT use driver_jobs_accepted_v1.driver_payout_pence — that is ILF commission accounting.
+ */
+function resolveSettlementPayoutFromPayload(
+  payload: Record<string, unknown>,
+  currency: string
+): {
+  totalPence: number | null;
+  basePence: number | null;
+  extrasPence: number;
+  payoutDisplay: string | null;
+  payoutBreakdownLine: string | null;
+} {
+  const totalPence = asInt(payload.driver_total_pence);
+  const basePence = asInt(payload.driver_payout_pence);
+  const extrasPence = asInt(payload.paid_extras_pence) ?? 0;
+
+  const payoutDisplay =
+    asNonEmptyString(payload.driver_payout_display) ??
+    (totalPence != null && totalPence > 0
+      ? formatDriverPayoutWholePence(totalPence, currency)
+      : null);
+
+  let payoutBreakdownLine: string | null = null;
+  if (extrasPence > 0 && basePence != null && basePence > 0) {
+    const baseDisplay = formatDriverPayoutWholePence(basePence, currency);
+    const extrasDisplay = formatDriverPayoutWholePence(extrasPence, currency);
+    if (baseDisplay && extrasDisplay) {
+      payoutBreakdownLine = `${baseDisplay} + ${extrasDisplay} extras`;
+    }
+  }
+
+  return { totalPence, basePence, extrasPence, payoutDisplay, payoutBreakdownLine };
+}
+
 export async function processDriverJobAccepted(
   { event, eventsRepository, deliveriesRepository, resend }: HandlerDeps,
   deps: { oneSignal?: OneSignalProvider; db?: ReturnType<typeof getSupabaseAdmin> } = {}
 ): Promise<void> {
   const db = deps.db ?? getSupabaseAdmin();
   const oneSignal = deps.oneSignal ?? new OneSignalProvider();
+  const payload = event.payload as Record<string, unknown>;
 
   const jobId =
     asNonEmptyString(event.job_id) ??
-    asNonEmptyString(event.payload.job_id) ??
-    asNonEmptyString((event.payload as { booking_leg_id?: unknown }).booking_leg_id);
+    asNonEmptyString(payload.job_id) ??
+    asNonEmptyString((payload as { booking_leg_id?: unknown }).booking_leg_id);
 
   if (!jobId) {
     await eventsRepository.markEventFailedRetryable(
@@ -55,6 +114,10 @@ export async function processDriverJobAccepted(
     );
     return;
   }
+
+  const payoutCurrency =
+    asNonEmptyString(payload.payout_currency) ?? asNonEmptyString(payload.currency) ?? 'GBP';
+  const settlement = resolveSettlementPayoutFromPayload(payload, payoutCurrency);
 
   const { data: row, error: viewError } = await db
     .from('driver_jobs_accepted_v1')
@@ -83,10 +146,6 @@ export async function processDriverJobAccepted(
 
   const v = row as DriverJobAcceptedRow;
   const driverEmail = asNonEmptyString(v.driver_email);
-  const payoutDisplay = formatPayout(
-    typeof v.driver_payout_pence === 'number' ? v.driver_payout_pence : null,
-    asNonEmptyString(v.payout_currency)
-  );
 
   const { data: driverAuth, error: driverErr } = await db
     .from('drivers')
@@ -113,6 +172,16 @@ export async function processDriverJobAccepted(
     bookingLegId: v.job_id,
     bookingType: v.booking_type
   });
+
+  const bookingReference =
+    asNonEmptyString(payload.booking_reference) ?? asNonEmptyString(v.booking_reference) ?? 'Booking';
+  const pickupAddress =
+    asNonEmptyString(payload.pickup_preview) ?? asNonEmptyString(v.pickup_address) ?? '';
+  const dropoffAddress =
+    asNonEmptyString(payload.dropoff_preview) ?? asNonEmptyString(v.dropoff_address) ?? '';
+
+  const emailPayoutPence = settlement.totalPence ?? settlement.basePence;
+  const emailPayoutDisplay = settlement.payoutDisplay ?? '—';
 
   let emailAttempted = false;
   let emailOk = false;
@@ -147,9 +216,9 @@ export async function processDriverJobAccepted(
       const { providerMessageId } = await resend.sendDriverJobAcceptedEmail({
         to: driverEmail,
         driverFirstName: asNonEmptyString(v.driver_first_name) ?? 'there',
-        bookingReference: asNonEmptyString(v.booking_reference) ?? '—',
-        pickupAddress: asNonEmptyString(v.pickup_address) ?? '',
-        dropoffAddress: asNonEmptyString(v.dropoff_address) ?? '',
+        bookingReference,
+        pickupAddress,
+        dropoffAddress,
         scheduledAt: formatScheduledAtForEmail(v.scheduled_at),
         passengerCount: v.passenger_count ?? '',
         bagCount: v.bag_count ?? '',
@@ -166,9 +235,9 @@ export async function processDriverJobAccepted(
         hoursRequested: bookingContext.hoursRequested,
         daysRequested: bookingContext.daysRequested,
         fleetTotalLegs: bookingContext.fleetTotalLegs,
-        driverPayoutPence: typeof v.driver_payout_pence === 'number' ? v.driver_payout_pence : null,
-        payoutCurrency: asNonEmptyString(v.payout_currency) ?? 'GBP',
-        driverPayoutDisplay: payoutDisplay ?? '—',
+        driverPayoutPence: emailPayoutPence,
+        payoutCurrency,
+        driverPayoutDisplay: emailPayoutDisplay,
         supportEmail: DEFAULT_SUPPORT_EMAIL,
         supportPhone: DEFAULT_SUPPORT_PHONE
       });
@@ -196,14 +265,15 @@ export async function processDriverJobAccepted(
   if (authUserId) {
     pushAttempted = true;
     const pushInput = {
-      bookingReference: asNonEmptyString(v.booking_reference) ?? 'Booking',
+      bookingReference,
       bookingType: v.booking_type != null ? String(v.booking_type) : null,
-      pickupAddress: asNonEmptyString(v.pickup_address) ?? '',
-      dropoffAddress: asNonEmptyString(v.dropoff_address) ?? '',
+      pickupAddress,
+      dropoffAddress,
       scheduledAt: v.scheduled_at,
       vehicleCategoryId: asNonEmptyString(v.vehicle_category_id),
       vehicleModelId: asNonEmptyString(v.vehicle_model_id),
-      payoutDisplay,
+      payoutDisplay: settlement.payoutDisplay,
+      payoutBreakdownLine: settlement.payoutBreakdownLine,
       legKind: bookingContext.legKind ?? asNonEmptyString(v.leg_kind),
       legNumber:
         typeof bookingContext.legNumber === 'number'
@@ -215,7 +285,14 @@ export async function processDriverJobAccepted(
       daysRequested: bookingContext.daysRequested,
       fleetTotalLegs: bookingContext.fleetTotalLegs
     };
-    const { title, message } = buildDriverJobAcceptedPushMessage(pushInput);
+
+    const pushTitleFromPayload = asNonEmptyString(payload.push_title);
+    const pushBodyFromPayload = asNonEmptyString(payload.push_body);
+    const defaultPush = buildDriverJobAcceptedPushMessage(pushInput, {
+      titleOverride: pushTitleFromPayload
+    });
+    const title = pushTitleFromPayload ?? defaultPush.title;
+    const message = pushBodyFromPayload ?? defaultPush.message;
 
     const pushDelivery = await deliveriesRepository.createDelivery({
       organization_id: event.organization_id,
@@ -230,7 +307,7 @@ export async function processDriverJobAccepted(
       max_attempts: 3,
       metadata: {
         event_family: 'driver_job',
-        booking_reference: asNonEmptyString(v.booking_reference),
+        booking_reference: bookingReference,
         push_preview_title: title,
         push_preview_message: message,
         job_id: v.job_id
@@ -242,7 +319,13 @@ export async function processDriverJobAccepted(
       const { providerMessageId, responseMetadata } = await oneSignal.sendPushToExternalUserId({
         externalUserId: authUserId,
         title,
-        message
+        message,
+        data: {
+          event_type: 'driver_job_accepted',
+          job_id: v.job_id,
+          booking_id: v.booking_id,
+          booking_reference: bookingReference
+        }
       });
       await deliveriesRepository.markDeliveryProviderAccepted(pushDelivery.id, providerMessageId, {
         provider: 'onesignal',
