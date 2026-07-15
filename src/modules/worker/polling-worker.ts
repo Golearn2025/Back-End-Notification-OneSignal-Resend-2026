@@ -50,7 +50,8 @@ export class PollingWorker {
             eventId: claimed.id,
             eventType: claimed.event_type,
             organizationId: claimed.organization_id,
-            status: 'failed_retryable'
+            status: 'failed_retryable',
+            reason
           },
           'Polling worker failed processing event'
         );

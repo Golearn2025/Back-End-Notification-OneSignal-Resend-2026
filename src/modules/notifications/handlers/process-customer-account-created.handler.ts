@@ -8,6 +8,7 @@ import {
   RESEND_TEMPLATE_ID,
   asNonEmptyString,
   formatCreatedDate,
+  isDeliverySucceeded,
   nextRetryAtIso
 } from '../notification-shared.js';
 import type { HandlerDeps } from './handler-deps.js';
@@ -45,6 +46,11 @@ export async function processCustomerAccountCreated({
       reply_to: DEFAULT_SUPPORT_EMAIL
     }
   });
+
+  if (isDeliverySucceeded(delivery.status)) {
+    await eventsRepository.markEventDelivered(event.id);
+    return;
+  }
 
   await deliveriesRepository.markDeliverySending(delivery.id);
 

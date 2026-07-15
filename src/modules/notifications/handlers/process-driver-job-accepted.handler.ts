@@ -6,6 +6,7 @@ import {
   DEFAULT_SUPPORT_PHONE,
   DRIVER_JOB_ACCEPTED_TEMPLATE_ALIAS,
   asNonEmptyString,
+  isDeliverySucceeded,
   nextRetryAtIso
 } from '../notification-shared.js';
 import { loadBookingNotificationContext } from '../booking-notification-context.service.js';
@@ -235,9 +236,12 @@ export async function processDriverJobAccepted(
       }
     });
 
-    await deliveriesRepository.markDeliverySending(emailDelivery.id);
-    try {
-      const { providerMessageId } = await resend.sendDriverJobAcceptedEmail({
+    if (isDeliverySucceeded(emailDelivery.status)) {
+      emailOk = true;
+    } else {
+      await deliveriesRepository.markDeliverySending(emailDelivery.id);
+      try {
+        const { providerMessageId } = await resend.sendDriverJobAcceptedEmail({
         to: driverEmail,
         driverFirstName: asNonEmptyString(v.driver_first_name) ?? 'there',
         bookingReference,
@@ -277,10 +281,11 @@ export async function processDriverJobAccepted(
         job_id: v.job_id
       });
       emailOk = true;
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : 'Resend driver_job_accepted failed';
-      await deliveriesRepository.markDeliveryFailedRetryable(emailDelivery.id, reason, nextRetryAtIso());
-      logger.warn({ eventId: event.id, err: reason }, 'driver_job_accepted email failed');
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'Resend driver_job_accepted failed';
+        await deliveriesRepository.markDeliveryFailedRetryable(emailDelivery.id, reason, nextRetryAtIso());
+        logger.warn({ eventId: event.id, err: reason }, 'driver_job_accepted email failed');
+      }
     }
   } else {
     logger.warn({ eventId: event.id, jobId }, 'driver_job_accepted: missing driver_email; skipping email');
@@ -375,9 +380,12 @@ export async function processDriverJobAccepted(
       }
     });
 
-    await deliveriesRepository.markDeliverySending(pushDelivery.id);
-    try {
-      const { providerMessageId, responseMetadata } = await oneSignal.sendPushToExternalUserId({
+    if (isDeliverySucceeded(pushDelivery.status)) {
+      pushOk = true;
+    } else {
+      await deliveriesRepository.markDeliverySending(pushDelivery.id);
+      try {
+        const { providerMessageId, responseMetadata } = await oneSignal.sendPushToExternalUserId({
         externalUserId: authUserId,
         title,
         message,
@@ -395,10 +403,11 @@ export async function processDriverJobAccepted(
         job_id: v.job_id
       });
       pushOk = true;
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : 'OneSignal driver_job_accepted push failed';
-      await deliveriesRepository.markDeliveryFailedRetryable(pushDelivery.id, reason, nextRetryAtIso());
-      logger.warn({ eventId: event.id, err: reason }, 'driver_job_accepted push failed');
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'OneSignal driver_job_accepted push failed';
+        await deliveriesRepository.markDeliveryFailedRetryable(pushDelivery.id, reason, nextRetryAtIso());
+        logger.warn({ eventId: event.id, err: reason }, 'driver_job_accepted push failed');
+      }
     }
   } else {
     logger.warn({ eventId: event.id, driverId: v.driver_id }, 'driver_job_accepted: missing auth_user_id; skipping push');

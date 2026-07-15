@@ -9,6 +9,7 @@ import {
   asNonEmptyString,
   formatCreatedDate,
   getBookingLineValue,
+  isDeliverySucceeded,
   nextRetryAtIso
 } from '../notification-shared.js';
 import type { HandlerDeps } from './handler-deps.js';
@@ -93,6 +94,11 @@ export async function processBookingPaymentConfirmed({
     }
   });
 
+  if (isDeliverySucceeded(delivery.status)) {
+    await eventsRepository.markEventDelivered(event.id);
+    return;
+  }
+
   await deliveriesRepository.markDeliverySending(delivery.id);
 
   try {
@@ -168,33 +174,35 @@ export async function processBookingPaymentConfirmed({
       }
     });
 
-    await deliveriesRepository.markDeliverySending(adminDelivery.id);
-    try {
-      const { providerMessageId: adminProviderMessageId } = await resend.sendJobsMailboxBookingConfirmedEmail({
-        to: JOBS_MAILBOX_ADDRESS,
-        bookingReference,
-        customerFirstName,
-        pickupLocation,
-        dropoffLocation,
-        pickupTime,
-        vehicleClass,
-        amountPaid,
-        currency,
-        adminBookingUrl
-      });
-      await deliveriesRepository.markDeliveryProviderAccepted(adminDelivery.id, adminProviderMessageId, {
-        provider: 'resend',
-        event_type: 'booking_payment_confirmed_admin',
-        template_alias: JOBS_MAILBOX_TEMPLATE_ALIAS,
-        template_version: 'v1',
-        render_mode: 'resend_template',
-        reply_to: JOBS_MAILBOX_ADDRESS,
-        event_family: 'payment',
-        mailbox: 'jobs'
-      });
-    } catch (adminError) {
-      const adminReason = adminError instanceof Error ? adminError.message : 'Resend jobs mailbox send failed';
-      await deliveriesRepository.markDeliveryFailedRetryable(adminDelivery.id, adminReason, nextRetryAtIso());
+    if (!isDeliverySucceeded(adminDelivery.status)) {
+      await deliveriesRepository.markDeliverySending(adminDelivery.id);
+      try {
+        const { providerMessageId: adminProviderMessageId } = await resend.sendJobsMailboxBookingConfirmedEmail({
+          to: JOBS_MAILBOX_ADDRESS,
+          bookingReference,
+          customerFirstName,
+          pickupLocation,
+          dropoffLocation,
+          pickupTime,
+          vehicleClass,
+          amountPaid,
+          currency,
+          adminBookingUrl
+        });
+        await deliveriesRepository.markDeliveryProviderAccepted(adminDelivery.id, adminProviderMessageId, {
+          provider: 'resend',
+          event_type: 'booking_payment_confirmed_admin',
+          template_alias: JOBS_MAILBOX_TEMPLATE_ALIAS,
+          template_version: 'v1',
+          render_mode: 'resend_template',
+          reply_to: JOBS_MAILBOX_ADDRESS,
+          event_family: 'payment',
+          mailbox: 'jobs'
+        });
+      } catch (adminError) {
+        const adminReason = adminError instanceof Error ? adminError.message : 'Resend jobs mailbox send failed';
+        await deliveriesRepository.markDeliveryFailedRetryable(adminDelivery.id, adminReason, nextRetryAtIso());
+      }
     }
 
     await eventsRepository.markEventDelivered(event.id);

@@ -10,7 +10,7 @@ import {
 } from '../driver-push.formatter.js';
 import { loadBookingNotificationContext } from '../booking-notification-context.service.js';
 import { DriverEligibilityService } from '../driver-eligibility.service.js';
-import { asNonEmptyString, nextRetryAtIso } from '../notification-shared.js';
+import { asNonEmptyString, isDeliverySucceeded, nextRetryAtIso } from '../notification-shared.js';
 import type { HandlerDeps } from './handler-deps.js';
 
 function asPence(value: unknown): number | null {
@@ -235,6 +235,11 @@ export async function processDriverJobAvailable(
         push_preview_message: message
       }
     });
+
+    if (isDeliverySucceeded(delivery.status)) {
+      successCount += 1;
+      continue;
+    }
 
     await deliveriesRepository.markDeliverySending(delivery.id);
     try {

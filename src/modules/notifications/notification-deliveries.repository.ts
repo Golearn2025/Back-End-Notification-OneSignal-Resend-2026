@@ -28,6 +28,45 @@ export class NotificationDeliveriesRepository {
   constructor(private readonly db: NotificationDeliveriesDb = getSupabaseAdmin()) {}
 
   async createDelivery(input: CreateNotificationDeliveryInput): Promise<NotificationDelivery> {
+    const existing = await this.findDelivery(input);
+    if (existing) {
+      return existing;
+    }
+
+    return this.insertDelivery(input);
+  }
+
+  private async findDelivery(
+    input: Pick<
+      CreateNotificationDeliveryInput,
+      'event_id' | 'recipient_type' | 'recipient_id' | 'recipient_address' | 'channel'
+    >
+  ): Promise<NotificationDelivery | null> {
+    let query = this.db
+      .from('notification_deliveries')
+      .select('*')
+      .eq('event_id', input.event_id)
+      .eq('recipient_type', input.recipient_type)
+      .eq('channel', input.channel);
+
+    if (input.recipient_id) {
+      query = query.eq('recipient_id', input.recipient_id);
+    } else if (input.recipient_address) {
+      query = query.eq('recipient_address', input.recipient_address);
+    } else {
+      query = query.is('recipient_id', null).is('recipient_address', null);
+    }
+
+    const { data, error } = await query.maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to find notification delivery: ${error.message}`);
+    }
+
+    return (data as NotificationDelivery | null) ?? null;
+  }
+
+  private async insertDelivery(input: CreateNotificationDeliveryInput): Promise<NotificationDelivery> {
     const { data, error } = await this.db
       .from('notification_deliveries')
       .insert({

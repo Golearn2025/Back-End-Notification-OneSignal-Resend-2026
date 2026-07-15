@@ -1,4 +1,4 @@
-import type { NotificationEvent } from './notification.types.js';
+import type { NotificationDeliveryStatus, NotificationEvent } from './notification.types.js';
 
 export const RETRY_MS = 5 * 60 * 1000;
 export const DEFAULT_WEBSITE_URL = 'https://vantage-lane.com';
@@ -13,6 +13,16 @@ export const JOBS_MAILBOX_ADDRESS = 'newjobs@vantage-lane.com';
 
 export function nextRetryAtIso(): string {
   return new Date(Date.now() + RETRY_MS).toISOString();
+}
+
+export function isDeliverySucceeded(status: NotificationDeliveryStatus): boolean {
+  return (
+    status === 'provider_accepted' ||
+    status === 'delivered' ||
+    status === 'sent' ||
+    status === 'opened' ||
+    status === 'clicked'
+  );
 }
 
 export function asNonEmptyString(value: unknown): string | null {
