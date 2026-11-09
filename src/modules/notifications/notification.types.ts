@@ -35,7 +35,10 @@ export type NotificationEventType =
   | 'trip_completed'
   | 'booking_cancelled'
   | 'payment_failed'
-  | 'booking_payment_confirmed';
+  | 'booking_payment_confirmed'
+  | 'admin_driver_system'
+  | 'admin_driver_documents'
+  | 'admin_driver_jobs';
 
 export type NotificationEvent = {
   id: string;

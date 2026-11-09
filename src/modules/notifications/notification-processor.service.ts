@@ -9,6 +9,10 @@ import { processBookingPaymentConfirmed } from './handlers/process-booking-payme
 import { processCustomerAccountCreated } from './handlers/process-customer-account-created.handler.js';
 import { processDriverJobAvailable } from './handlers/process-driver-job-available.handler.js';
 import { processDriverJobAccepted } from './handlers/process-driver-job-accepted.handler.js';
+import {
+  isAdminDriverNotificationEventType,
+  processAdminDriverNotification
+} from './handlers/process-admin-driver-notification.handler.js';
 
 export class NotificationProcessorService {
   constructor(
@@ -62,6 +66,15 @@ export class NotificationProcessorService {
         eventsRepository: this.eventsRepository,
         deliveriesRepository: this.deliveriesRepository,
         resend: this.resend
+      });
+      return;
+    }
+
+    if (isAdminDriverNotificationEventType(event.event_type)) {
+      await processAdminDriverNotification({
+        event,
+        eventsRepository: this.eventsRepository,
+        deliveriesRepository: this.deliveriesRepository
       });
       return;
     }
