@@ -24,16 +24,16 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "latest",
+    "@types/node": "latest",
     "dotenv": "^17.2.3",
     "fastify": "latest",
     "nodemailer": "^8.0.7",
     "pino": "latest",
+    "typescript": "latest",
     "zod": "latest"
   },
   "devDependencies": {
-    "@types/node": "latest",
     "tsx": "latest",
-    "typescript": "latest",
     "vitest": "latest"
   }
 }

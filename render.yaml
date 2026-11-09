@@ -3,7 +3,8 @@ services:
     name: backend-notifications-api
     runtime: node
     plan: starter
-    buildCommand: npm ci && npm run build
+    # --include=dev: NODE_ENV=production otherwise skips typescript → tsc not found
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: node dist/src/index.js
     healthCheckPath: /health
     envVars:
@@ -34,7 +35,7 @@ services:
     name: backend-notifications-worker
     runtime: node
     plan: starter
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: env -u SUPABASE_REALTIME_KEY node dist/src/worker.js
     envVars:
       - key: NODE_ENV
