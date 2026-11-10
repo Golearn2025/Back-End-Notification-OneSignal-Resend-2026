@@ -60,6 +60,52 @@ export class DriverEligibilityService {
     }));
   }
 
+  async resolveDriversByIds(input: {
+    organizationId: string;
+    driverIds: string[];
+  }): Promise<EligibleDriver[]> {
+    const driverIds = Array.from(
+      new Set(input.driverIds.map((id) => asNonEmptyString(id)).filter(Boolean))
+    ) as string[];
+    if (driverIds.length === 0) {
+      return [];
+    }
+
+    const { data, error } = await this.db
+      .from('drivers')
+      .select('id, auth_user_id')
+      .eq('organization_id', input.organizationId)
+      .is('deleted_at', null)
+      .in('id', driverIds)
+      .not('auth_user_id', 'is', null);
+
+    if (error) {
+      throw new Error(`Failed to load drivers by id: ${error.message}`);
+    }
+
+    return (data ?? []).map((driver: any) => ({
+      driverId: String(driver.id),
+      authUserId: String(driver.auth_user_id)
+    }));
+  }
+
+  async resolvePremiumDriverIds(organizationId: string): Promise<Set<string>> {
+    const { data, error } = await this.db
+      .from('dispatch_premium_drivers')
+      .select('driver_id')
+      .eq('organization_id', organizationId);
+
+    if (error) {
+      throw new Error(`Failed to load premium drivers: ${error.message}`);
+    }
+
+    return new Set(
+      (data ?? [])
+        .map((row: any) => asNonEmptyString(row.driver_id))
+        .filter((value: string | null): value is string => value !== null)
+    );
+  }
+
   async resolveActiveExternalUserIds(input: {
     organizationId: string;
     authUserIds: string[];

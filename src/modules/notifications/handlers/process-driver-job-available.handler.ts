@@ -165,13 +165,33 @@ export async function processDriverJobAvailable(
   const title = asNonEmptyString(event.payload.push_title) ?? defaultPush.title;
   const message = asNonEmptyString(event.payload.push_message) ?? defaultPush.message;
 
+  const targetedDriverId =
+    asNonEmptyString(event.driver_id) ??
+    asNonEmptyString(event.payload.exclusive_driver_id);
+  const dispatchWave = asNonEmptyString(event.payload.dispatch_wave);
+  const isTargetedDispatch = targetedDriverId != null;
+
   let eligibleDrivers: Array<{ driverId: string; authUserId: string }>;
   try {
-    eligibleDrivers = await driverEligibilityService.resolveEligibleDrivers({
-      organizationId,
-      vehicleCategoryId,
-      vehicleModelId
-    });
+    if (isTargetedDispatch) {
+      // Direct / per-driver Premium events: notify only the targeted driver.
+      eligibleDrivers = await driverEligibilityService.resolveDriversByIds({
+        organizationId,
+        driverIds: [targetedDriverId]
+      });
+    } else {
+      eligibleDrivers = await driverEligibilityService.resolveEligibleDrivers({
+        organizationId,
+        vehicleCategoryId,
+        vehicleModelId
+      });
+
+      // Safety net if a premium wave event was enqueued without driver_id.
+      if (dispatchWave === 'premium') {
+        const premiumIds = await driverEligibilityService.resolvePremiumDriverIds(organizationId);
+        eligibleDrivers = eligibleDrivers.filter((driver) => premiumIds.has(driver.driverId));
+      }
+    }
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'Failed to load eligible drivers';
     await eventsRepository.markEventFailedRetryable(event.id, reason, nextRetryAtIso());
@@ -179,7 +199,15 @@ export async function processDriverJobAvailable(
   }
 
   if (eligibleDrivers.length === 0) {
-    logger.info({ eventId: event.id, eventType: event.event_type }, 'No eligible drivers for push');
+    logger.info(
+      {
+        eventId: event.id,
+        eventType: event.event_type,
+        targetedDriverId,
+        dispatchWave
+      },
+      'No eligible drivers for push'
+    );
     await eventsRepository.markEventDelivered(event.id);
     return;
   }
@@ -218,8 +246,8 @@ export async function processDriverJobAvailable(
     const delivery = await deliveriesRepository.createDelivery({
       organization_id: organizationId,
       event_id: event.id,
-      recipient_type: 'eligible_driver',
-      recipient_selection: 'eligible_drivers',
+      recipient_type: isTargetedDispatch ? 'driver' : 'eligible_driver',
+      recipient_selection: isTargetedDispatch ? 'assigned_driver' : 'eligible_drivers',
       recipient_id: driver.driverId,
       recipient_address: driver.authUserId,
       channel: 'push',
