@@ -165,6 +165,41 @@ export async function processDriverJobAvailable(
   const title = asNonEmptyString(event.payload.push_title) ?? defaultPush.title;
   const message = asNonEmptyString(event.payload.push_message) ?? defaultPush.message;
 
+  // Already cancelled (accept/cancel path) — never send, including retries.
+  if (event.status === 'cancelled') {
+    logger.info({ eventId: event.id, bookingLegId }, 'Skipping cancelled driver_job_available event');
+    return;
+  }
+
+  // Offerability gate (first send + retry + in-flight processing):
+  // job accepted/cancelled/unpaid must stop remaining provider sends.
+  if (bookingLegId) {
+    try {
+      const { data: offerable, error: offerErr } = await db.rpc('job_leg_is_offerable', {
+        p_booking_leg_id: bookingLegId
+      });
+      if (offerErr) {
+        throw new Error(offerErr.message);
+      }
+      if (offerable !== true) {
+        logger.info(
+          { eventId: event.id, bookingLegId, eventStatus: event.status },
+          'Job no longer offerable — cancelling notification event before send'
+        );
+        if (typeof eventsRepository.markEventCancelled === 'function') {
+          await eventsRepository.markEventCancelled(event.id, 'job_not_offerable');
+        } else {
+          await eventsRepository.markEventDelivered(event.id);
+        }
+        return;
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'job_leg_is_offerable check failed';
+      await eventsRepository.markEventFailedRetryable(event.id, reason, nextRetryAtIso());
+      return;
+    }
+  }
+
   const targetedDriverId =
     asNonEmptyString(event.driver_id) ??
     asNonEmptyString(event.payload.exclusive_driver_id);

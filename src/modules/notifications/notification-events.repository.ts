@@ -122,6 +122,13 @@ export class NotificationEventsRepository {
     });
   }
 
+  async markEventCancelled(eventId: string, reason: string): Promise<void> {
+    await this.updateEventStatus(eventId, 'cancelled', {
+      next_retry_at: null,
+      guardrail_result: { cancelled_reason: reason }
+    });
+  }
+
   private async updateEventStatus(
     eventId: string,
     status: string,
