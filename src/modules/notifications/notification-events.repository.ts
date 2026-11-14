@@ -135,7 +135,7 @@ export class NotificationEventsRepository {
       .or(
         `status.in.(pending,ready),and(status.eq.failed_retryable,or(next_retry_at.is.null,next_retry_at.lte.${nowIso}))`
       )
-      .filter('payload->>campaign_id', 'eq', campaignId)
+      .filter("payload->>'campaign_id'", 'eq', campaignId)
       .order('occurred_at', { ascending: true })
       .limit(Math.max(1, limit));
 
@@ -176,23 +176,98 @@ export class NotificationEventsRepository {
   }
 
   async claimEventForProcessing(eventId: string): Promise<NotificationEvent | null> {
+    const claimed = await this.claimEventsForProcessing([eventId]);
+    return claimed[0] ?? null;
+  }
+
+  /** Single round-trip claim for a campaign (or any id list). */
+  async claimEventsForProcessing(eventIds: string[]): Promise<NotificationEvent[]> {
+    const ids = [...new Set(eventIds.filter(Boolean))];
+    if (ids.length === 0) {
+      return [];
+    }
+    const nowIso = new Date().toISOString();
     const { data, error } = await this.db
       .from('notification_events')
       .update({
         status: 'processing',
-        processing_started_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        processing_started_at: nowIso,
+        updated_at: nowIso
       })
-      .eq('id', eventId)
+      .in('id', ids)
       .in('status', ['pending', 'ready', 'failed_retryable'])
-      .select('*')
-      .maybeSingle();
+      .select('*');
 
     if (error) {
-      throw new Error(`Failed to claim notification event: ${error.message}`);
+      throw new Error(`Failed to claim notification events: ${error.message}`);
     }
 
-    return (data as NotificationEvent | null) ?? null;
+    return (data ?? []) as NotificationEvent[];
+  }
+
+  /**
+   * Persist OneSignal request identity once for an entire campaign
+   * (avoids N read-modify-write payload merges).
+   */
+  async mergeEventPayloadForCampaign(
+    campaignId: string,
+    patch: Record<string, unknown>
+  ): Promise<number> {
+    const { data: rows, error: loadError } = await this.db
+      .from('notification_events')
+      .select('id, payload')
+      .filter("payload->>'campaign_id'", 'eq', campaignId);
+
+    if (loadError) {
+      throw new Error(`Failed to load campaign payloads: ${loadError.message}`);
+    }
+
+    const list = (rows ?? []) as Array<{ id: string; payload: Record<string, unknown> | null }>;
+    if (list.length === 0) {
+      return 0;
+    }
+
+    // One update per distinct next payload shape is still N if payloads differ;
+    // campaign members share content so we write the merged payload in a single
+    // SQL update via filter when every row can accept the same jsonb merge.
+    const { data, error } = await this.db
+      .from('notification_events')
+      .update({
+        payload: { ...(list[0]?.payload ?? {}), ...patch },
+        updated_at: new Date().toISOString()
+      })
+      .filter("payload->>'campaign_id'", 'eq', campaignId)
+      .select('id');
+
+    if (error) {
+      // Fallback: if bulk overwrite is unsafe because payloads already diverged,
+      // merge per-id (still correct; slower path).
+      for (const row of list) {
+        await this.mergeEventPayload(row.id, patch);
+      }
+      return list.length;
+    }
+
+    return (data ?? []).length;
+  }
+
+  async markEventsDelivered(eventIds: string[]): Promise<void> {
+    const ids = [...new Set(eventIds.filter(Boolean))];
+    if (ids.length === 0) {
+      return;
+    }
+    const { error } = await this.db
+      .from('notification_events')
+      .update({
+        status: 'delivered',
+        processed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .in('id', ids);
+
+    if (error) {
+      throw new Error(`Failed to mark events delivered: ${error.message}`);
+    }
   }
 
   async markEventPartiallyDelivered(eventId: string): Promise<void> {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { processAdminDriverNotificationBatch } from '../../src/modules/notifications/handlers/process-admin-driver-notification-batch.js';
+import { makeDriversDb } from '../helpers/drivers-db.fake.js';
 
 describe('processAdminDriverNotificationBatch', () => {
   it('sends shared-content admin events as one OneSignal request', async () => {
@@ -17,18 +18,9 @@ describe('processAdminDriverNotificationBatch', () => {
       responseMetadata: { invalidExternalIds: [] }
     }));
 
-    const maybeSingle = vi
-      .fn()
-      .mockResolvedValueOnce({ data: { auth_user_id: 'auth-1' }, error: null })
-      .mockResolvedValueOnce({ data: { auth_user_id: 'auth-2' }, error: null });
-
-    const db = {
-      from: vi.fn(() => ({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle
-      }))
-    };
+    const db = makeDriversDb({
+      authForId: (id) => (id === 'd1' ? 'auth-1' : id === 'd2' ? 'auth-2' : `auth-${id}`)
+    });
 
     const baseEvent = {
       organization_id: 'org-1',
@@ -54,7 +46,10 @@ describe('processAdminDriverNotificationBatch', () => {
         markEventDelivered,
         markEventFailedRetryable,
         markEventDeadLetter: vi.fn(),
-        mergeEventPayload: vi.fn()
+        mergeEventPayload: vi.fn(),
+        markEventsDelivered: vi.fn(async (ids: string[]) => {
+          for (const id of ids) markEventDelivered(id);
+        })
       } as any,
       deliveriesRepository: {
         createDelivery,

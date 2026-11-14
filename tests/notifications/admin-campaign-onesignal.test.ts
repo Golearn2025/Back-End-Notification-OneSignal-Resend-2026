@@ -3,6 +3,7 @@ import { processAdminDriverNotificationBatch } from '../../src/modules/notificat
 import { isOneSignalIdempotencyKey } from '../../src/modules/notifications/onesignal-idempotency.js';
 import { PollingWorker } from '../../src/modules/worker/polling-worker.js';
 import { WorkerManager } from '../../src/modules/worker/worker-manager.js';
+import { makeDriversDb } from '../helpers/drivers-db.fake.js';
 import { fakeAdminEnqueueCampaign, fakeAdminEnqueueIndividual } from '../helpers/admin-enqueue.fake.js';
 import type { NotificationEvent } from '../../src/modules/notifications/notification.types.js';
 
@@ -115,18 +116,7 @@ describe('admin campaign → single OneSignal + distinct campaign ids', () => {
       if (row) store.set(id, { ...row, status: 'delivered' });
     });
 
-    let driverLookup = 0;
-    const db = {
-      from: vi.fn(() => ({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn(async () => {
-          const n = driverLookup;
-          driverLookup += 1;
-          return { data: { auth_user_id: `auth-${n}` }, error: null };
-        })
-      }))
-    };
+    const db = makeDriversDb({ sequential: true });
 
     const deliveriesRepository = {
       createDelivery: vi.fn(async (input: any) => ({
@@ -145,9 +135,17 @@ describe('admin campaign → single OneSignal + distinct campaign ids', () => {
         events: batch,
         eventsRepository: {
           markEventDelivered,
+          markEventsDelivered: vi.fn(async (ids: string[]) => {
+            for (const id of ids) await markEventDelivered(id);
+          }),
           markEventFailedRetryable: vi.fn(),
           markEventDeadLetter: vi.fn(),
-          mergeEventPayload
+          mergeEventPayload,
+          mergeEventPayloadForCampaign: vi.fn(async (_cid: string, patch: Record<string, unknown>) => {
+            for (const [id] of store) {
+              await mergeEventPayload(id, patch);
+            }
+          })
         } as any,
         deliveriesRepository: deliveriesRepository as any,
         oneSignal: { sendPushToExternalUserIds: onesignal.sendPushToExternalUserIds } as any,
@@ -161,6 +159,14 @@ describe('admin campaign → single OneSignal + distinct campaign ids', () => {
         getPendingEventsFiltered,
         getPendingEventsByCampaignId,
         claimEventForProcessing,
+        claimEventsForProcessing: vi.fn(async (ids: string[]) => {
+          const out = [];
+          for (const id of ids) {
+            const row = await claimEventForProcessing(id);
+            if (row) out.push(row);
+          }
+          return out;
+        }),
         markEventFailedRetryable: vi.fn(),
         mergeEventPayload
       } as any,
@@ -205,17 +211,7 @@ describe('admin campaign → single OneSignal + distinct campaign ids', () => {
     });
 
     const mergeEventPayload = vi.fn(async () => undefined);
-    let driverLookup = 0;
-    const db = {
-      from: vi.fn(() => ({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn(async () => {
-          driverLookup += 1;
-          return { data: { auth_user_id: `auth-${driverLookup}` }, error: null };
-        })
-      }))
-    };
+    const db = makeDriversDb({ sequential: true });
     const deliveries = {
       createDelivery: vi.fn(async (input: any) => ({
         id: `del-${input.event_id}`,
@@ -269,17 +265,7 @@ describe('admin campaign → single OneSignal + distinct campaign ids', () => {
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(undefined);
 
-    let driverLookup = 0;
-    const db = {
-      from: vi.fn(() => ({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn(async () => {
-          driverLookup += 1;
-          return { data: { auth_user_id: `auth-${driverLookup}` }, error: null };
-        })
-      }))
-    };
+    const db = makeDriversDb({ sequential: true });
     const deliveries = {
       createDelivery: vi.fn(async (input: any) => ({
         id: `del-${input.recipient_id}`,
@@ -293,6 +279,7 @@ describe('admin campaign → single OneSignal + distinct campaign ids', () => {
     };
     const eventsRepository = {
       markEventDelivered: vi.fn(),
+      markEventsDelivered: vi.fn(),
       markEventFailedRetryable: vi.fn(),
       markEventDeadLetter: vi.fn(),
       mergeEventPayload
@@ -315,7 +302,6 @@ describe('admin campaign → single OneSignal + distinct campaign ids', () => {
     expect(onesignal.sends[0]?.externalUserIds).toEqual(['auth-1', 'auth-2']);
 
     // Retry remaining (and re-prepare) — must reuse same UUID + full original audience.
-    driverLookup = 0;
     await processAdminDriverNotificationBatch({
       events: withPayload() as any,
       eventsRepository: eventsRepository as any,

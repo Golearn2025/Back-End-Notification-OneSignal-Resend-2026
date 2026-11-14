@@ -1,25 +1,25 @@
 -- REVIEW ONLY — do not apply automatically to production.
 -- Explicit campaign identity for admin driver pushes.
 --
--- Problem: admin UI called admin_enqueue_driver_notification once per driver, so a
--- 1_000-driver campaign became 1_000 independent events. The worker could only
--- claim a budget slice → many OneSignal requests. Grouping by title/body alone is
--- unsafe (two intentional sends with the same text must stay distinct).
+-- Auth: SECURITY DEFINER helpers are callable only by service_role.
+-- The verified Admin route uses createAdminClient() (service role).
+-- Do NOT GRANT EXECUTE to authenticated/anon/PUBLIC.
 --
--- This migration:
---   1) Adds optional p_campaign_id to the single-driver enqueue (null = individual).
---   2) Adds admin_enqueue_driver_notification_campaign for full-audience campaigns:
---      one campaign_id, N per-driver events + inbox rows, shared push content.
--- Worker gathers all pending events for a campaign_id before a single OneSignal send.
+-- Compatibility: keep the historical 6-arg signature as a thin wrapper.
+-- Adding a 7-arg overload does NOT replace the 6-arg function automatically.
 
+-- Drop any previous 7-arg (e.g. with DEFAULTs) so CREATE is unambiguous vs 6-arg.
+DROP FUNCTION IF EXISTS public.admin_enqueue_driver_notification(uuid, uuid, text, text, text, uuid, uuid);
+
+-- NOTE: p_campaign_id has no DEFAULT so the 6-arg overload stays unambiguous.
 CREATE OR REPLACE FUNCTION public.admin_enqueue_driver_notification(
   p_organization_id uuid,
   p_driver_id uuid,
   p_type text,
   p_title text,
   p_body text,
-  p_actor_id uuid DEFAULT NULL,
-  p_campaign_id uuid DEFAULT NULL
+  p_actor_id uuid,
+  p_campaign_id uuid
 )
 RETURNS uuid
 LANGUAGE plpgsql
@@ -148,6 +148,36 @@ BEGIN
 END;
 $function$;
 
+-- Historical 6-arg signature (Admin/clients may still resolve this overload).
+-- DROP first: CREATE OR REPLACE cannot remove/alter parameter defaults on the live 6-arg.
+DROP FUNCTION IF EXISTS public.admin_enqueue_driver_notification(uuid, uuid, text, text, text, uuid);
+
+CREATE OR REPLACE FUNCTION public.admin_enqueue_driver_notification(
+  p_organization_id uuid,
+  p_driver_id uuid,
+  p_type text,
+  p_title text,
+  p_body text,
+  p_actor_id uuid DEFAULT NULL
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+BEGIN
+  RETURN public.admin_enqueue_driver_notification(
+    p_organization_id,
+    p_driver_id,
+    p_type,
+    p_title,
+    p_body,
+    p_actor_id,
+    NULL::uuid
+  );
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.admin_enqueue_driver_notification_campaign(
   p_organization_id uuid,
   p_driver_ids uuid[],
@@ -193,14 +223,36 @@ END;
 $function$;
 
 COMMENT ON FUNCTION public.admin_enqueue_driver_notification(uuid, uuid, text, text, text, uuid, uuid) IS
-  'Enqueue one admin driver notification (inbox + push event). Optional p_campaign_id links bulk campaign members; null = individual.';
+  'Enqueue one admin driver notification (inbox + push event). Optional p_campaign_id links bulk campaign members; null = individual. service_role only.';
+
+COMMENT ON FUNCTION public.admin_enqueue_driver_notification(uuid, uuid, text, text, text, uuid) IS
+  'Compat 6-arg wrapper → 7-arg with p_campaign_id NULL. service_role only.';
 
 COMMENT ON FUNCTION public.admin_enqueue_driver_notification_campaign(uuid, uuid[], text, text, text, uuid) IS
-  'Enqueue a full-audience admin campaign: one new campaign_id, N per-driver events/inbox rows, shared push content.';
+  'Enqueue a full-audience admin campaign: one campaign_id, N per-driver events/inbox rows. service_role only.';
 
+-- Lock down: revoke broadly, grant only service_role (Admin server client).
 REVOKE ALL ON FUNCTION public.admin_enqueue_driver_notification(uuid, uuid, text, text, text, uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.admin_enqueue_driver_notification(uuid, uuid, text, text, text, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.admin_enqueue_driver_notification_campaign(uuid, uuid[], text, text, text, uuid) FROM PUBLIC;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    REVOKE ALL ON FUNCTION public.admin_enqueue_driver_notification(uuid, uuid, text, text, text, uuid, uuid) FROM authenticated;
+    REVOKE ALL ON FUNCTION public.admin_enqueue_driver_notification(uuid, uuid, text, text, text, uuid) FROM authenticated;
+    REVOKE ALL ON FUNCTION public.admin_enqueue_driver_notification_campaign(uuid, uuid[], text, text, text, uuid) FROM authenticated;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    REVOKE ALL ON FUNCTION public.admin_enqueue_driver_notification(uuid, uuid, text, text, text, uuid, uuid) FROM anon;
+    REVOKE ALL ON FUNCTION public.admin_enqueue_driver_notification(uuid, uuid, text, text, text, uuid) FROM anon;
+    REVOKE ALL ON FUNCTION public.admin_enqueue_driver_notification_campaign(uuid, uuid[], text, text, text, uuid) FROM anon;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+    CREATE ROLE service_role NOLOGIN;
+  END IF;
+END $$;
+
 GRANT EXECUTE ON FUNCTION public.admin_enqueue_driver_notification(uuid, uuid, text, text, text, uuid, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.admin_enqueue_driver_notification(uuid, uuid, text, text, text, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.admin_enqueue_driver_notification_campaign(uuid, uuid[], text, text, text, uuid) TO service_role;
-GRANT EXECUTE ON FUNCTION public.admin_enqueue_driver_notification(uuid, uuid, text, text, text, uuid, uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.admin_enqueue_driver_notification_campaign(uuid, uuid[], text, text, text, uuid) TO authenticated;

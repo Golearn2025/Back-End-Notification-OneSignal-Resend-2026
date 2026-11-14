@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { makeDriversDb } from '../helpers/drivers-db.fake.js';
 import { processAdminDriverNotificationBatch } from '../../src/modules/notifications/handlers/process-admin-driver-notification-batch.js';
 import { processDriverJobAvailable } from '../../src/modules/notifications/handlers/process-driver-job-available.handler.js';
 
@@ -64,18 +65,7 @@ describe('latency concurrency simulation (fake providers)', () => {
       }
     }));
 
-    let driverLookup = 0;
-    const campaignDb = {
-      from: vi.fn(() => ({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn(async () => {
-          const n = driverLookup;
-          driverLookup += 1;
-          return { data: { auth_user_id: `auth-${n}` }, error: null };
-        })
-      }))
-    };
+    const campaignDb = makeDriversDb({ sequential: true });
 
     const campaignPromise = processAdminDriverNotificationBatch({
       events: campaignEvents as any,
@@ -191,13 +181,7 @@ describe('latency concurrency simulation (fake providers)', () => {
         markDeliveryFailedFinal: vi.fn()
       } as any,
       oneSignal: { sendPushToExternalUserIds: fastIndividual } as any,
-      db: {
-        from: vi.fn(() => ({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn(async () => ({ data: { auth_user_id: 'auth-ind' }, error: null }))
-        }))
-      } as any
+      db: makeDriversDb({ authForId: () => 'auth-ind' }) as any
     });
 
     const emailPromise = (async () => {

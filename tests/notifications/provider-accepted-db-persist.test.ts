@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { processDriverJobAvailable } from '../../src/modules/notifications/handlers/process-driver-job-available.handler.js';
+import { makeDriversDb } from '../helpers/drivers-db.fake.js';
 import { processAdminDriverNotificationBatch } from '../../src/modules/notifications/handlers/process-admin-driver-notification-batch.js';
 
 describe('provider accepted but DB persist fails', () => {
@@ -105,10 +106,7 @@ describe('provider accepted but DB persist fails', () => {
       responseMetadata: { invalidExternalIds: [] }
     }));
 
-    const maybeSingle = vi
-      .fn()
-      .mockResolvedValueOnce({ data: { auth_user_id: 'auth-1' }, error: null })
-      .mockResolvedValueOnce({ data: { auth_user_id: 'auth-2' }, error: null });
+    const db = makeDriversDb({ authForId: (id) => (id === 'd1' ? 'auth-1' : 'auth-2') });
 
     const baseEvent = {
       organization_id: 'org-1',
@@ -148,13 +146,7 @@ describe('provider accepted but DB persist fails', () => {
         markDeliveryFailedFinal: vi.fn()
       } as any,
       oneSignal: { sendPushToExternalUserIds } as any,
-      db: {
-        from: vi.fn(() => ({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle
-        }))
-      } as any
+      db: db as any
     });
 
     expect(markEventDelivered).toHaveBeenCalledWith('e1');

@@ -36,6 +36,115 @@ export class NotificationDeliveriesRepository {
     return this.insertDelivery(input);
   }
 
+  /**
+   * Batch create with duplicate protection:
+   * 1) load existing by event_id list
+   * 2) insert only missing rows in one insert
+   */
+  async createDeliveriesBatch(
+    inputs: CreateNotificationDeliveryInput[]
+  ): Promise<NotificationDelivery[]> {
+    if (inputs.length === 0) {
+      return [];
+    }
+
+    const eventIds = [...new Set(inputs.map((i) => i.event_id))];
+    const { data: existingRows, error: findError } = await this.db
+      .from('notification_deliveries')
+      .select('*')
+      .in('event_id', eventIds)
+      .eq('channel', 'push')
+      .eq('recipient_type', 'driver');
+
+    if (findError) {
+      throw new Error(`Failed to find notification deliveries: ${findError.message}`);
+    }
+
+    const existing = (existingRows ?? []) as NotificationDelivery[];
+    const byEventId = new Map(existing.map((row) => [row.event_id, row]));
+    const missing = inputs.filter((input) => !byEventId.has(input.event_id));
+
+    if (missing.length > 0) {
+      const { data: inserted, error: insertError } = await this.db
+        .from('notification_deliveries')
+        .insert(
+          missing.map((input) => ({
+            organization_id: input.organization_id,
+            event_id: input.event_id,
+            recipient_type: input.recipient_type,
+            recipient_selection: input.recipient_selection,
+            recipient_id: input.recipient_id ?? null,
+            recipient_address: input.recipient_address ?? null,
+            channel: input.channel,
+            provider: input.provider,
+            status: input.status ?? 'queued',
+            max_attempts: input.max_attempts ?? 3,
+            metadata: input.metadata ?? {}
+          }))
+        )
+        .select('*');
+
+      if (insertError) {
+        throw new Error(`Failed to create notification deliveries: ${insertError.message}`);
+      }
+
+      for (const row of (inserted ?? []) as NotificationDelivery[]) {
+        byEventId.set(row.event_id, row);
+      }
+    }
+
+    return inputs.map((input) => {
+      const row = byEventId.get(input.event_id);
+      if (!row) {
+        throw new Error(`Missing delivery after batch create for event ${input.event_id}`);
+      }
+      return row;
+    });
+  }
+
+  async markDeliveriesSending(deliveryIds: string[]): Promise<void> {
+    const ids = [...new Set(deliveryIds.filter(Boolean))];
+    if (ids.length === 0) {
+      return;
+    }
+    const { error } = await this.db
+      .from('notification_deliveries')
+      .update({
+        status: 'sending',
+        updated_at: new Date().toISOString()
+      })
+      .in('id', ids);
+
+    if (error) {
+      throw new Error(`Failed to mark deliveries sending: ${error.message}`);
+    }
+  }
+
+  async markDeliveriesProviderAccepted(
+    deliveryIds: string[],
+    providerMessageId: string,
+    metadata: Record<string, unknown> = {}
+  ): Promise<void> {
+    const ids = [...new Set(deliveryIds.filter(Boolean))];
+    if (ids.length === 0) {
+      return;
+    }
+    const { error } = await this.db
+      .from('notification_deliveries')
+      .update({
+        status: 'provider_accepted',
+        provider_message_id: providerMessageId,
+        sent_at: new Date().toISOString(),
+        metadata,
+        updated_at: new Date().toISOString()
+      })
+      .in('id', ids);
+
+    if (error) {
+      throw new Error(`Failed to mark deliveries provider_accepted: ${error.message}`);
+    }
+  }
+
   private async findDelivery(
     input: Pick<
       CreateNotificationDeliveryInput,

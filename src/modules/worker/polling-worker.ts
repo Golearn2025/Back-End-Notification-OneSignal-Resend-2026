@@ -287,6 +287,15 @@ export class PollingWorker {
     events: NotificationEvent[],
     stats: PollingRunStats
   ): Promise<NotificationEvent[]> {
+    if (events.length === 0) {
+      return [];
+    }
+    if (typeof this.eventsRepository.claimEventsForProcessing === 'function') {
+      const claimed = await this.eventsRepository.claimEventsForProcessing(events.map((e) => e.id));
+      stats.claimed += claimed.length;
+      stats.skippedClaims += Math.max(0, events.length - claimed.length);
+      return claimed;
+    }
     const claimed: NotificationEvent[] = [];
     for (const event of events) {
       const row = await this.eventsRepository.claimEventForProcessing(event.id);
