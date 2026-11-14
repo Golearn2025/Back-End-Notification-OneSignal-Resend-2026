@@ -290,6 +290,13 @@ async function sendAdminGroup(input: {
   if (campaignId) {
     pushData.campaign_id = campaignId;
   }
+  const deepLink = asNonEmptyString(first.payload?.deep_link);
+  const inboxType = asNonEmptyString(first.payload?.inbox_type);
+  const jobId =
+    asNonEmptyString(first.job_id) ?? asNonEmptyString(first.payload?.job_id);
+  if (deepLink) pushData.deep_link = deepLink;
+  if (inboxType) pushData.inbox_type = inboxType;
+  if (jobId) pushData.job_id = jobId;
 
   const persistedFromEvents = group
     .map((e) => readPersistedOneSignalRequest(e.payload))

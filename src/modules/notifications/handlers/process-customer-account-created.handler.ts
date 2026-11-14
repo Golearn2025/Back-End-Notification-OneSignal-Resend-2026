@@ -3,6 +3,7 @@ import { logger } from '../../../config/logger.js';
 import {
   DEFAULT_SUPPORT_EMAIL,
   DEFAULT_SUPPORT_PHONE,
+  DEFAULT_SUPPORT_WHATSAPP,
   DEFAULT_WEBSITE_URL,
   RESEND_TEMPLATE_ALIAS,
   RESEND_TEMPLATE_ID,
@@ -25,6 +26,7 @@ export async function processCustomerAccountCreated({
   const websiteUrl = env.PUBLIC_WEBSITE_URL ?? DEFAULT_WEBSITE_URL;
   const supportEmail = DEFAULT_SUPPORT_EMAIL;
   const supportPhone = DEFAULT_SUPPORT_PHONE;
+  const supportWhatsapp = DEFAULT_SUPPORT_WHATSAPP;
   const createdDate = formatCreatedDate(event);
 
   const delivery = await deliveriesRepository.createDelivery({
@@ -41,9 +43,9 @@ export async function processCustomerAccountCreated({
     metadata: {
       template_id: RESEND_TEMPLATE_ID,
       template_alias: RESEND_TEMPLATE_ALIAS,
-      template_version: 'v1',
+      template_version: 'v2',
       render_mode: 'resend_template',
-      reply_to: DEFAULT_SUPPORT_EMAIL
+      reply_to: supportEmail
     }
   });
 
@@ -61,7 +63,8 @@ export async function processCustomerAccountCreated({
       createdDate,
       websiteUrl,
       supportEmail,
-      supportPhone
+      supportPhone,
+      supportWhatsapp
     });
 
     await deliveriesRepository.markDeliveryProviderAccepted(delivery.id, providerMessageId, {
@@ -69,9 +72,9 @@ export async function processCustomerAccountCreated({
       event_type: 'customer_account_created',
       template_id: RESEND_TEMPLATE_ID,
       template_alias: RESEND_TEMPLATE_ALIAS,
-      template_version: 'v1',
+      template_version: 'v2',
       render_mode: 'resend_template',
-      reply_to: DEFAULT_SUPPORT_EMAIL
+      reply_to: supportEmail
     });
     await eventsRepository.markEventDelivered(event.id);
 

@@ -6,123 +6,111 @@
     <title>Payment received for your Vantage Lane booking</title>
   </head>
   <body
-    style="margin:0;padding:0;background-color:#ffffff;color:#333;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;"
+    style="margin:0;padding:0;background-color:#f5f5f5;color:#333;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;"
   >
     <div
       style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;"
     >
-      Your payment has been received and your booking is secured.
+      Payment received · {{{booking_reference}}} · Pickup {{{pickup_time}}}
     </div>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#ffffff;padding:24px 0;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5f5f5;padding:32px 0;">
       <tr>
-        <td align="center">
+        <td align="center" style="padding:0 16px;">
           <table
             role="presentation"
             width="600"
             cellspacing="0"
             cellpadding="0"
-            style="width:100%;max-width:600px;background:#ffffff;"
+            style="width:100%;max-width:600px;background:#ffffff;border:1px solid #e0e0e0;border-radius:16px;overflow:hidden;"
           >
             <tr>
               <td>
                 <img
                   src="https://ruskhucrvjvuuzwlboqn.supabase.co/storage/v1/object/public/email-assets/Vantage_Lane/headers/header-v1-payment-success.webp"
-                  alt="Vantage Lane payment success"
+                  alt="Vantage Lane"
                   width="600"
                   style="display:block;width:100%;height:auto;border:0;"
                 />
               </td>
             </tr>
+
             <tr>
-              <td style="padding:28px 30px 8px 30px;text-align:center;background:#ffffff;">
+              <td style="padding:28px 28px 0 28px;text-align:center;">
                 <span
-                  style="display:inline-block;background:linear-gradient(135deg,#3d7a54 0%,#244a34 100%);border:1px solid #1e3d2a;color:#ffffff;padding:7px 14px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:1.3px;"
+                  style="display:inline-block;background:#e8f5e9;color:#2e7d32;padding:6px 14px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:1.2px;"
                   >PAYMENT SUCCESSFUL</span
                 >
               </td>
             </tr>
+
             <tr>
-              <td style="padding:10px 30px 0 30px;text-align:center;background:#ffffff;">
-                <h1 style="margin:0;font-size:30px;line-height:1.3;color:#1a1a1a;font-weight:700;">
+              <td style="padding:14px 28px 0 28px;text-align:center;">
+                <h1 style="margin:0;font-size:28px;line-height:1.3;color:#1a1a1a;font-weight:700;">
                   Thank you for your payment
                 </h1>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:14px 30px 0 30px;text-align:center;background:#ffffff;">
-                <p style="margin:0;font-size:15px;line-height:1.65;color:#555;">
-                  Hello {{{customer_first_name}}}, we've received your payment and your Vantage Lane booking is secured.
+                <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:#666666;">
+                  Hello {{{customer_first_name}}}, your Vantage Lane booking
+                  <strong style="color:#1a1a1a;">{{{booking_reference}}}</strong> is secured.
                 </p>
               </td>
             </tr>
+
+            <!-- Transaction -->
             <tr>
-              <td style="padding:24px 30px 0 30px;background:#ffffff;">
+              <td style="padding:24px 28px 0 28px;">
                 <table
                   role="presentation"
                   width="100%"
                   cellspacing="0"
                   cellpadding="0"
-                  style="background:#f2ede4;border:1px solid #d4c5b0;border-radius:8px;"
+                  style="background:#fffbf0;border:1px solid #e8d9b8;border-radius:12px;"
                 >
                   <tr>
-                    <td style="padding:15px 20px;">
-                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                        <tr>
-                          <td style="height:1px;background-color:#b08d57;"></td>
-                          <td
-                            style="color:#b08d57;text-transform:uppercase;font-size:13px;letter-spacing:2px;font-weight:700;padding:0 15px;white-space:nowrap;"
-                          >
-                            Transaction Summary
-                          </td>
-                          <td style="height:1px;background-color:#b08d57;"></td>
-                        </tr>
-                      </table>
+                    <td style="padding:14px 18px;border-bottom:1px solid #e8d9b8;">
+                      <div
+                        style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#b08d57;"
+                      >
+                        Transaction
+                      </div>
                     </td>
-                  </tr>
-                  <tr>
-                    <td style="height:1px;background:#d4c5b0;"></td>
                   </tr>
                   <tr>
                     <td style="padding:0;">
                       <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                         <tr>
-                          <td style="padding:12px 18px;color:#666;font-size:14px;width:42%;">Invoice Number</td>
-                          <td style="padding:12px 18px;color:#1a1a1a;font-size:14px;text-align:right;">
+                          <td style="padding:12px 18px;color:#666;font-size:14px;width:42%;">{{{invoice_label}}}</td>
+                          <td style="padding:12px 18px;color:#1a1a1a;font-size:14px;text-align:right;font-weight:600;">
                             {{{invoice_number}}}
                           </td>
                         </tr>
                         <tr>
-                          <td
-                            style="padding:12px 18px;color:#666;font-size:14px;width:42%;border-top:1px solid #ddcfbc;"
-                          >
+                          <td style="padding:12px 18px;color:#666;font-size:14px;border-top:1px solid #f0e6d2;">
                             Booked at
                           </td>
                           <td
-                            style="padding:12px 18px;color:#1a1a1a;font-size:14px;text-align:right;border-top:1px solid #ddcfbc;"
+                            style="padding:12px 18px;color:#1a1a1a;font-size:14px;text-align:right;border-top:1px solid #f0e6d2;"
                           >
                             {{{payment_date}}}
                           </td>
                         </tr>
                         <tr>
-                          <td
-                            style="padding:12px 18px;color:#666;font-size:14px;width:42%;border-top:1px solid #ddcfbc;"
-                          >
-                            Payment Method
+                          <td style="padding:12px 18px;color:#666;font-size:14px;border-top:1px solid #f0e6d2;">
+                            Payment method
                           </td>
                           <td
-                            style="padding:12px 18px;color:#1a1a1a;font-size:14px;text-align:right;border-top:1px solid #ddcfbc;"
+                            style="padding:12px 18px;color:#1a1a1a;font-size:14px;text-align:right;border-top:1px solid #f0e6d2;"
                           >
                             {{{payment_method}}}
                           </td>
                         </tr>
                         <tr>
                           <td
-                            style="padding:13px 18px;color:#7d6333;font-size:15px;font-weight:700;width:42%;border-top:1px solid #d4c5b0;background:#efe4d0;"
+                            style="padding:14px 18px;color:#7d6333;font-size:15px;font-weight:700;border-top:1px solid #e8d9b8;background:#efe4d0;"
                           >
-                            Amount Paid
+                            Amount paid
                           </td>
                           <td
-                            style="padding:13px 18px;color:#1a1a1a;font-size:15px;font-weight:700;text-align:right;border-top:1px solid #d4c5b0;background:#efe4d0;white-space:nowrap;"
+                            style="padding:14px 18px;color:#1a1a1a;font-size:15px;font-weight:700;text-align:right;border-top:1px solid #e8d9b8;background:#efe4d0;"
                           >
                             {{{amount_paid}}} {{{currency}}}
                           </td>
@@ -133,102 +121,115 @@
                 </table>
               </td>
             </tr>
+
+            <!-- Journey -->
             <tr>
-              <td style="padding:18px 30px 0 30px;background:#ffffff;">
+              <td style="padding:18px 28px 0 28px;">
                 <table
                   role="presentation"
                   width="100%"
                   cellspacing="0"
                   cellpadding="0"
-                  style="background:#f2ede4;border:1px solid #d4c5b0;border-radius:8px;"
+                  style="background:#fafafa;border:1px solid #e0e0e0;border-radius:12px;"
                 >
                   <tr>
-                    <td style="padding:15px 20px;">
-                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                        <tr>
-                          <td style="height:1px;background-color:#c5a059;"></td>
-                          <td
-                            style="color:#b08d57;text-transform:uppercase;font-size:13px;letter-spacing:2px;font-weight:700;padding:0 15px;white-space:nowrap;"
-                          >
-                            Booking Summary
-                          </td>
-                          <td style="height:1px;background-color:#c5a059;"></td>
-                        </tr>
-                      </table>
+                    <td style="padding:14px 18px;border-bottom:1px solid #e0e0e0;">
+                      <div
+                        style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#b08d57;"
+                      >
+                        Your journey
+                      </div>
                     </td>
-                  </tr>
-                  <tr>
-                    <td style="height:1px;background:#d4c5b0;"></td>
                   </tr>
                   <tr>
                     <td style="padding:0;">
                       <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                         <tr>
-                          <td style="padding:11px 18px;color:#666;font-size:14px;width:42%;">
-                            {{{booking_line_1_label}}}
+                          <td style="padding:12px 18px;color:#666;font-size:14px;width:36%;vertical-align:top;">
+                            Type
                           </td>
-                          <td style="padding:11px 18px;color:#1a1a1a;font-size:14px;text-align:right;">
-                            {{{booking_line_1_value}}}
-                          </td>
-                        </tr>
-                        <tr>
-                          <td
-                            style="padding:11px 18px;color:#666;font-size:14px;width:42%;border-top:1px solid #ddcfbc;"
-                          >
-                            {{{booking_line_2_label}}}
-                          </td>
-                          <td
-                            style="padding:11px 18px;color:#1a1a1a;font-size:14px;text-align:right;border-top:1px solid #ddcfbc;"
-                          >
-                            {{{booking_line_2_value}}}
+                          <td style="padding:12px 18px;color:#1a1a1a;font-size:14px;text-align:right;font-weight:600;">
+                            {{{booking_type_label}}}
                           </td>
                         </tr>
                         <tr>
-                          <td
-                            style="padding:11px 18px;color:#666;font-size:14px;width:42%;border-top:1px solid #ddcfbc;"
-                          >
-                            {{{booking_line_3_label}}}
+                          <td style="padding:12px 18px;color:#666;font-size:14px;border-top:1px solid #ececec;vertical-align:top;">
+                            Reference
                           </td>
                           <td
-                            style="padding:11px 18px;color:#1a1a1a;font-size:14px;text-align:right;border-top:1px solid #ddcfbc;"
+                            style="padding:12px 18px;color:#1a1a1a;font-size:14px;text-align:right;font-weight:700;border-top:1px solid #ececec;"
                           >
-                            {{{booking_line_3_value}}}
+                            {{{booking_reference}}}
                           </td>
                         </tr>
                         <tr>
-                          <td
-                            style="padding:11px 18px;color:#666;font-size:14px;width:42%;border-top:1px solid #ddcfbc;"
-                          >
-                            {{{booking_line_4_label}}}
+                          <td style="padding:12px 18px;color:#666;font-size:14px;border-top:1px solid #ececec;vertical-align:top;">
+                            Pickup time
                           </td>
                           <td
-                            style="padding:11px 18px;color:#1a1a1a;font-size:14px;text-align:right;border-top:1px solid #ddcfbc;"
+                            style="padding:12px 18px;color:#1a1a1a;font-size:14px;text-align:right;font-weight:600;border-top:1px solid #ececec;"
                           >
-                            {{{booking_line_4_value}}}
+                            {{{pickup_time}}}
                           </td>
                         </tr>
                         <tr>
-                          <td
-                            style="padding:11px 18px;color:#666;font-size:14px;width:42%;border-top:1px solid #ddcfbc;"
-                          >
-                            {{{booking_line_5_label}}}
+                          <td style="padding:12px 18px;color:#666;font-size:14px;border-top:1px solid #ececec;vertical-align:top;">
+                            Pickup
                           </td>
                           <td
-                            style="padding:11px 18px;color:#1a1a1a;font-size:14px;text-align:right;border-top:1px solid #ddcfbc;"
+                            style="padding:12px 18px;color:#1a1a1a;font-size:14px;text-align:right;font-weight:600;border-top:1px solid #ececec;"
                           >
-                            {{{booking_line_5_value}}}
+                            {{{pickup_address}}}
                           </td>
                         </tr>
                         <tr>
-                          <td
-                            style="padding:11px 18px;color:#666;font-size:14px;width:42%;border-top:1px solid #ddcfbc;"
-                          >
-                            {{{booking_line_6_label}}}
+                          <td style="padding:12px 18px;color:#666;font-size:14px;border-top:1px solid #ececec;vertical-align:top;">
+                            Drop-off
                           </td>
                           <td
-                            style="padding:11px 18px;color:#1a1a1a;font-size:14px;text-align:right;border-top:1px solid #ddcfbc;"
+                            style="padding:12px 18px;color:#1a1a1a;font-size:14px;text-align:right;font-weight:600;border-top:1px solid #ececec;"
                           >
-                            {{{booking_line_6_value}}}
+                            {{{dropoff_address}}}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style="padding:12px 18px;color:#666;font-size:14px;border-top:1px solid #ececec;vertical-align:top;">
+                            {{{flight_row_label}}}
+                          </td>
+                          <td
+                            style="padding:12px 18px;color:#1a1a1a;font-size:14px;text-align:right;font-weight:600;border-top:1px solid #ececec;"
+                          >
+                            {{{flight_number}}}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style="padding:12px 18px;color:#666;font-size:14px;border-top:1px solid #ececec;vertical-align:top;">
+                            Category
+                          </td>
+                          <td
+                            style="padding:12px 18px;color:#1a1a1a;font-size:14px;text-align:right;font-weight:600;border-top:1px solid #ececec;"
+                          >
+                            {{{category_label}}}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style="padding:12px 18px;color:#666;font-size:14px;border-top:1px solid #ececec;vertical-align:top;">
+                            Vehicle
+                          </td>
+                          <td
+                            style="padding:12px 18px;color:#1a1a1a;font-size:14px;text-align:right;font-weight:600;border-top:1px solid #ececec;"
+                          >
+                            {{{vehicle_label}}}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style="padding:12px 18px;color:#666;font-size:14px;border-top:1px solid #ececec;vertical-align:top;">
+                            Passengers / luggage
+                          </td>
+                          <td
+                            style="padding:12px 18px;color:#1a1a1a;font-size:14px;text-align:right;font-weight:600;border-top:1px solid #ececec;"
+                          >
+                            {{{passengers_luggage}}}
                           </td>
                         </tr>
                       </table>
@@ -237,21 +238,66 @@
                 </table>
               </td>
             </tr>
+
+            <!-- CTA -->
             <tr>
-              <td style="padding:26px 30px 0 30px;text-align:center;background:#ffffff;">
+              <td style="padding:26px 28px 0 28px;text-align:center;">
                 <a
                   href="{{{receipt_url}}}"
-                  style="display:inline-block;background:linear-gradient(to bottom,#e8c68a 0%,#c5a059 100%);color:#111;text-decoration:none;font-weight:700;font-size:14px;padding:14px 24px;border-radius:7px;border:1px solid #b08d57;"
-                  >Download Receipt</a
+                  style="display:inline-block;background:linear-gradient(to bottom,#e8c68a 0%,#c5a059 100%);color:#111;text-decoration:none;font-weight:700;font-size:14px;padding:14px 28px;border-radius:10px;border:1px solid #b08d57;"
+                  >{{{receipt_cta}}}</a
                 >
               </td>
             </tr>
+
+            <!-- Contact buttons -->
             <tr>
-              <td style="padding:24px 30px 28px 30px;text-align:center;background:#ffffff;">
-                <p style="margin:0;font-size:13px;line-height:1.7;color:#777;">
-                  Need help with your invoice? Contact {{{support_email}}} or call {{{support_phone}}}
+              <td style="padding:28px 28px 8px 28px;text-align:center;">
+                <p style="margin:0 0 14px;font-size:13px;color:#777;">Need help? Reach us anytime:</p>
+                <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin:0 auto;">
+                  <tr>
+                    <td style="padding:0 6px 10px 6px;">
+                      <a
+                        href="{{{support_email_href}}}"
+                        style="display:inline-block;background:#1a1a1a;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;padding:12px 16px;border-radius:10px;"
+                        >Email</a
+                      >
+                    </td>
+                    <td style="padding:0 6px 10px 6px;">
+                      <a
+                        href="{{{support_whatsapp_href}}}"
+                        style="display:inline-block;background:#25d366;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;padding:12px 16px;border-radius:10px;"
+                        >WhatsApp</a
+                      >
+                    </td>
+                    <td style="padding:0 6px 10px 6px;">
+                      <a
+                        href="{{{support_phone_href}}}"
+                        style="display:inline-block;background:#b08d57;color:#111111;text-decoration:none;font-size:13px;font-weight:600;padding:12px 16px;border-radius:10px;"
+                        >Call</a
+                      >
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:8px 28px 32px 28px;text-align:center;border-top:1px solid #ececec;">
+                <p style="margin:16px 0 0;font-size:13px;line-height:1.7;color:#555;">
+                  <a href="{{{support_email_href}}}" style="color:#b08d57;text-decoration:none;font-weight:600;"
+                    >{{{support_email}}}</a
+                  ><br />
+                  WhatsApp
+                  <a href="{{{support_whatsapp_href}}}" style="color:#b08d57;text-decoration:none;font-weight:600;"
+                    >{{{support_whatsapp}}}</a
+                  ><br />
+                  Office
+                  <a href="{{{support_phone_href}}}" style="color:#b08d57;text-decoration:none;font-weight:600;"
+                    >{{{support_phone}}}</a
+                  >
                 </p>
-                <p style="margin:10px 0 0;font-size:12px;line-height:1.6;color:#999;">
+                <p style="margin:12px 0 0;font-size:12px;line-height:1.6;color:#999;">
                   All times are shown in UK time (Europe/London).
                 </p>
               </td>

@@ -1,14 +1,20 @@
 import type { NotificationDeliveryStatus, NotificationEvent } from './notification.types.js';
+import { formatUkDate } from './uk-datetime.js';
 
 export const RETRY_MS = 5 * 60 * 1000;
 export const DEFAULT_WEBSITE_URL = 'https://vantage-lane.com';
-export const DEFAULT_SUPPORT_EMAIL = 'info@vantage-lane.com';
-export const DEFAULT_SUPPORT_PHONE = '+44 20 4620 3131';
+/** Customer-facing support email on transactional templates */
+export const DEFAULT_SUPPORT_EMAIL = 'contact@vantage-lane.com';
+/** Office / landline (customer emails) */
+export const DEFAULT_SUPPORT_PHONE = '+44 20 4534 7305';
+/** WhatsApp from vantage-lane.com/contact */
+export const DEFAULT_SUPPORT_WHATSAPP = '+44 7376 188443';
 export const RESEND_TEMPLATE_ID = 'c27ab80b-22ef-4249-a5d1-f78ed1d72f8d';
 export const RESEND_TEMPLATE_ALIAS = 'customer_account_created_v1';
 export const PAYMENT_TEMPLATE_ALIAS = 'payment_success_customer_v1';
 export const JOBS_MAILBOX_TEMPLATE_ALIAS = 'jobs_mailbox_booking_confirmed_v1';
 export const DRIVER_JOB_ACCEPTED_TEMPLATE_ALIAS = 'driver_job_accepted_v1';
+export const DRIVER_DOCUMENT_EXPIRING_TEMPLATE_ALIAS = 'driver_document_expiring_v1';
 export const JOBS_MAILBOX_ADDRESS = 'newjobs@vantage-lane.com';
 
 /** Job dispatch / accept — must not wait behind admin campaigns or bulk email. */
@@ -96,22 +102,15 @@ export function formatDisplayToken(value: string | null): string | null {
 
 export function formatCreatedDate(event: Pick<NotificationEvent, 'occurred_at' | 'created_at'>): string {
   const source = asNonEmptyString(event.occurred_at) ?? asNonEmptyString(event.created_at);
+  // Always Europe/London — never rely on server local (US deploys broke customer emails).
   if (!source) {
-    return new Date().toLocaleDateString('en-GB', {
-      year: 'numeric',
-      month: 'long',
-      day: '2-digit'
-    });
+    return formatUkDate(new Date(), 'long');
   }
   const parsed = new Date(source);
   if (Number.isNaN(parsed.getTime())) {
     return source;
   }
-  return parsed.toLocaleDateString('en-GB', {
-    year: 'numeric',
-    month: 'long',
-    day: '2-digit'
-  });
+  return formatUkDate(parsed, 'long');
 }
 
 export function getBookingLineValue(payload: Record<string, unknown>, expectedLabel: string): string | null {

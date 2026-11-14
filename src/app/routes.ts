@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { registerHealthRoutes } from '../modules/health/health.routes.js';
 import { registerNotificationTestRoutes } from '../modules/notifications/notification-test.routes.js';
+import { registerAutomationTestRoutes } from '../modules/notifications/automation-test.routes.js';
 import { internalAuthPlugin } from '../modules/security/internal-auth.plugin.js';
 
 export async function registerRoutes(app: FastifyInstance) {
@@ -10,5 +11,6 @@ export async function registerRoutes(app: FastifyInstance) {
   await app.register(async (internalApp) => {
     await internalAuthPlugin(internalApp, {});
     await registerNotificationTestRoutes(internalApp);
+    await registerAutomationTestRoutes(internalApp);
   }, { prefix: '/internal' });
 }

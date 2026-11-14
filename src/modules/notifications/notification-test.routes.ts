@@ -7,6 +7,7 @@ import { OneSignalProvider } from '../providers/onesignal.provider.js';
 import { logger } from '../../config/logger.js';
 import { getEnv } from '../../config/env.js';
 import { getSupabaseAdmin } from '../../config/supabase.js';
+import { formatUkDate, formatUkDateTimeWithLabel } from './uk-datetime.js';
 
 const bodySchema = z.object({
   organizationId: z.string().uuid(),
@@ -79,20 +80,9 @@ function asNonEmptyString(value: unknown): string | null {
 }
 
 function formatDateTime(value: string | null | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-  return parsed.toLocaleString('en-GB', {
-    year: 'numeric',
-    month: 'long',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  // Customer-facing test emails: always UK wall clock + label.
+  const formatted = formatUkDateTimeWithLabel(value, { month: 'long' });
+  return formatted.length > 0 ? formatted : null;
 }
 
 function formatRoute(pickup: string | undefined, dropoff: string | undefined): string {
@@ -374,8 +364,9 @@ export async function registerNotificationTestRoutes(app: FastifyInstance) {
     const db = getSupabaseAdmin();
     const env = getEnv();
     const DEFAULT_WEBSITE_URL = 'https://vantage-lane.com';
-    const supportEmail = 'info@vantage-lane.com';
-    const supportPhone = '+44 20 4620 3131';
+    const supportEmail = 'contact@vantage-lane.com';
+    const supportPhone = '+44 20 4534 7305';
+    const supportWhatsapp = '+44 7376 188443';
 
     let query = db.from('app_notification_payment_success_context').select('*').limit(1);
     if (bookingId) {
@@ -401,12 +392,65 @@ export async function registerNotificationTestRoutes(app: FastifyInstance) {
     }
 
     const context = contextData as PaymentContextRow;
+    const legs = parseLegs(context.legs_json);
+    const leg1 = pickLeg(legs, 1) ?? legs[0] ?? null;
+    const pickupAddress = asNonEmptyString(leg1?.pickup_address) ?? 'Unknown pickup';
+    const dropoffAddress = asNonEmptyString(leg1?.dropoff_address) ?? 'Unknown dropoff';
+
+    const [{ data: flightRow }, { data: categoryRow }, { data: modelRow }] = await Promise.all([
+      db
+        .from('booking_legs')
+        .select('flight_number')
+        .eq('booking_id', context.booking_id)
+        .is('deleted_at', null)
+        .order('leg_number', { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+      context.vehicle_category_id
+        ? db
+            .from('vehicle_categories')
+            .select('name')
+            .eq('id', context.vehicle_category_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      context.vehicle_model_id
+        ? db
+            .from('vehicle_models')
+            .select('name')
+            .eq('id', context.vehicle_model_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null })
+    ]);
+
+    const flightNumber = asNonEmptyString(
+      (flightRow as { flight_number?: string | null } | null)?.flight_number
+    );
+    const categoryLabel =
+      asNonEmptyString((categoryRow as { name?: string | null } | null)?.name) ??
+      asNonEmptyString(context.vehicle_category_id) ??
+      '—';
+    const vehicleLabel =
+      asNonEmptyString((modelRow as { name?: string | null } | null)?.name) ??
+      asNonEmptyString(context.vehicle_model_id) ??
+      '—';
+    const bookingTypeLabel =
+      context.booking_type === 'oneway'
+        ? 'One Way'
+        : context.booking_type
+          ? context.booking_type.charAt(0).toUpperCase() + context.booking_type.slice(1)
+          : 'Booking';
+    const passengersLuggage = `${context.passenger_count ?? 0} / ${context.bag_count ?? 0}`;
+    const pickupTime =
+      formatDateTime(context.first_scheduled_at) ?? 'Pending confirmation';
+
     const bookingLines = buildBookingLines(context);
     const nowIso = new Date().toISOString();
     const formattedPaymentDate =
-      formatDateTime(context.payment_date) ??
-      new Date().toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: '2-digit' });
-    const amountPaid = context.amount_formatted ?? formatAmount(context.amount_pence, context.currency) ?? 'GBP 0.00';
+      formatDateTime(context.payment_date) ?? formatUkDate(new Date(), 'long');
+    const amountPaid =
+      typeof context.amount_pence === 'number'
+        ? (context.amount_pence / 100).toFixed(2)
+        : '0.00';
     const customerEmail = customerEmailOverride ?? context.customer_email;
     const receiptUrl =
       asNonEmptyString(context.receipt_url) ??
@@ -433,35 +477,58 @@ export async function registerNotificationTestRoutes(app: FastifyInstance) {
         customer_first_name: asNonEmptyString(context.customer_first_name) ?? 'there',
         booking_reference: context.booking_reference,
         booking_type: context.booking_type,
+        booking_type_label: bookingTypeLabel,
         invoice_number: asNonEmptyString(context.invoice_number) ?? 'Pending',
         payment_date: formattedPaymentDate,
         payment_method: normalizePaymentMethod(asNonEmptyString(context.payment_method_raw_or_metadata)),
         amount_paid: amountPaid,
         currency: context.currency ?? 'GBP',
         receipt_url: receiptUrl,
-        booking_line_1_label: bookingLines[0]?.label ?? '',
-        booking_line_1_value: bookingLines[0]?.value ?? '',
-        booking_line_2_label: bookingLines[1]?.label ?? '',
-        booking_line_2_value: bookingLines[1]?.value ?? '',
-        booking_line_3_label: bookingLines[2]?.label ?? '',
-        booking_line_3_value: bookingLines[2]?.value ?? '',
-        booking_line_4_label: bookingLines[3]?.label ?? '',
-        booking_line_4_value: bookingLines[3]?.value ?? '',
-        booking_line_5_label: bookingLines[4]?.label ?? '',
-        booking_line_5_value: bookingLines[4]?.value ?? '',
-        booking_line_6_label: bookingLines[5]?.label ?? '',
-        booking_line_6_value: bookingLines[5]?.value ?? '',
+        pickup_address: pickupAddress,
+        dropoff_address: dropoffAddress,
+        pickup_location: pickupAddress,
+        dropoff_location: dropoffAddress,
+        pickup_time: pickupTime,
+        flight_number: flightNumber ?? '',
+        category_label: categoryLabel,
+        vehicle_label: vehicleLabel,
+        vehicle_class: `${categoryLabel} · ${vehicleLabel}`,
+        passengers_luggage: passengersLuggage,
+        passenger_count: context.passenger_count ?? 0,
+        bag_count: context.bag_count ?? 0,
+        booking_line_1_label: bookingLines[0]?.label ?? 'Booking Type',
+        booking_line_1_value: bookingLines[0]?.value ?? bookingTypeLabel,
+        booking_line_2_label: 'Reference',
+        booking_line_2_value: context.booking_reference,
+        booking_line_3_label: 'Pickup time',
+        booking_line_3_value: pickupTime,
+        booking_line_4_label: 'Pickup',
+        booking_line_4_value: pickupAddress,
+        booking_line_5_label: 'Drop-off',
+        booking_line_5_value: dropoffAddress,
+        booking_line_6_label: flightNumber ? 'Flight' : 'Passengers / Luggage',
+        booking_line_6_value: flightNumber ?? passengersLuggage,
         support_email: supportEmail,
         support_phone: supportPhone,
+        support_whatsapp: supportWhatsapp,
         context_source: 'app_notification_payment_success_context',
-        event_version: 'v1'
+        event_version: 'v2'
       }
     });
 
     return reply.code(201).send({
       eventId: event.id,
       bookingId: context.booking_id,
-      bookingReference: context.booking_reference
+      bookingReference: context.booking_reference,
+      preview: {
+        to: customerEmail,
+        supportEmail,
+        supportPhone,
+        supportWhatsapp,
+        flightNumber,
+        categoryLabel,
+        vehicleLabel
+      }
     });
   });
 }

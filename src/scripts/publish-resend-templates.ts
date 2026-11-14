@@ -58,6 +58,12 @@ const TEMPLATES: readonly TemplateDef[] = [
     filename: 'driver_job_accepted_v1.html',
     displayName: 'Vantage Lane — driver job accepted v1',
     defaultSubject: 'Job confirmed — Vantage Lane'
+  },
+  {
+    alias: 'driver_document_expiring_v1',
+    filename: 'driver_document_expiring_v1.html',
+    displayName: 'Vantage Lane — driver document expiring v1',
+    defaultSubject: 'Document expiring — Vantage Lane'
   }
 ] as const;
 

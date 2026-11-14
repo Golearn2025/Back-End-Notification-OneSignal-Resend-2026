@@ -4,41 +4,22 @@ import {
   buildDriverJobAcceptedTemplateSend,
   type SendDriverJobAcceptedEmailInput
 } from './resend/driver-job-accepted.template.js';
+import {
+  buildDriverDocumentExpiringTemplateSend,
+  type SendDriverDocumentExpiringEmailInput
+} from './resend/driver-document-expiring.template.js';
+import {
+  buildPaymentSuccessCustomerTemplateSend,
+  type SendBookingPaymentConfirmedEmailInput
+} from './resend/payment-success-customer.template.js';
+import {
+  buildCustomerAccountCreatedTemplateSend,
+  type SendCustomerAccountCreatedEmailInput
+} from './resend/customer-account-created.template.js';
 import type { SendResendTemplateInput } from './resend/send-template.types.js';
 
-export type SendCustomerAccountCreatedEmailInput = {
-  to: string;
-  customerFirstName: unknown;
-  createdDate: unknown;
-  websiteUrl: unknown;
-  supportEmail: unknown;
-  supportPhone: unknown;
-};
-
-export type SendBookingPaymentConfirmedEmailInput = {
-  to: string;
-  customerFirstName: unknown;
-  invoiceNumber: unknown;
-  paymentDate: unknown;
-  paymentMethod: unknown;
-  amountPaid: unknown;
-  currency: unknown;
-  receiptUrl: unknown;
-  bookingLine1Label: unknown;
-  bookingLine1Value: unknown;
-  bookingLine2Label: unknown;
-  bookingLine2Value: unknown;
-  bookingLine3Label: unknown;
-  bookingLine3Value: unknown;
-  bookingLine4Label: unknown;
-  bookingLine4Value: unknown;
-  bookingLine5Label: unknown;
-  bookingLine5Value: unknown;
-  bookingLine6Label: unknown;
-  bookingLine6Value: unknown;
-  supportEmail: unknown;
-  supportPhone: unknown;
-};
+export type { SendCustomerAccountCreatedEmailInput };
+export type { SendBookingPaymentConfirmedEmailInput };
 
 export type SendJobsMailboxBookingConfirmedEmailInput = {
   to: string;
@@ -59,6 +40,7 @@ export type SendCustomerAccountCreatedEmailResult = {
 
 export type { SendResendTemplateInput } from './resend/send-template.types.js';
 export type { SendDriverJobAcceptedEmailInput } from './resend/driver-job-accepted.template.js';
+export type { SendDriverDocumentExpiringEmailInput } from './resend/driver-document-expiring.template.js';
 
 function escapeTemplateValue(value: unknown): string {
   if (value === null || value === undefined) {
@@ -145,55 +127,13 @@ export class ResendProvider implements ICustomerAccountCreatedEmailSender {
   async sendCustomerAccountCreatedEmail(
     input: SendCustomerAccountCreatedEmailInput
   ): Promise<SendCustomerAccountCreatedEmailResult> {
-    return this.sendTemplateEmail({
-      to: input.to,
-      templateIdOrAlias: 'customer_account_created_v1',
-      subject: 'Welcome to Vantage Lane',
-      replyTo: 'info@vantage-lane.com',
-      tags: [{ name: 'event_type', value: 'customer_account_created' }],
-      variables: {
-        customer_first_name: input.customerFirstName,
-        created_date: input.createdDate,
-        website_url: input.websiteUrl,
-        support_email: input.supportEmail,
-        support_phone: input.supportPhone
-      }
-    });
+    return this.sendTemplateEmail(buildCustomerAccountCreatedTemplateSend(input));
   }
 
   async sendBookingPaymentConfirmedEmail(
     input: SendBookingPaymentConfirmedEmailInput
   ): Promise<SendCustomerAccountCreatedEmailResult> {
-    return this.sendTemplateEmail({
-      to: input.to,
-      templateIdOrAlias: 'payment_success_customer_v1',
-      subject: 'Payment received for your Vantage Lane booking',
-      replyTo: 'info@vantage-lane.com',
-      tags: [{ name: 'event_type', value: 'booking_payment_confirmed' }],
-      variables: {
-        customer_first_name: input.customerFirstName,
-        invoice_number: input.invoiceNumber,
-        payment_date: input.paymentDate,
-        payment_method: input.paymentMethod,
-        amount_paid: input.amountPaid,
-        currency: input.currency,
-        receipt_url: input.receiptUrl,
-        booking_line_1_label: input.bookingLine1Label,
-        booking_line_1_value: input.bookingLine1Value,
-        booking_line_2_label: input.bookingLine2Label,
-        booking_line_2_value: input.bookingLine2Value,
-        booking_line_3_label: input.bookingLine3Label,
-        booking_line_3_value: input.bookingLine3Value,
-        booking_line_4_label: input.bookingLine4Label,
-        booking_line_4_value: input.bookingLine4Value,
-        booking_line_5_label: input.bookingLine5Label,
-        booking_line_5_value: input.bookingLine5Value,
-        booking_line_6_label: input.bookingLine6Label,
-        booking_line_6_value: input.bookingLine6Value,
-        support_email: input.supportEmail,
-        support_phone: input.supportPhone
-      }
-    });
+    return this.sendTemplateEmail(buildPaymentSuccessCustomerTemplateSend(input));
   }
 
   async sendJobsMailboxBookingConfirmedEmail(
@@ -224,6 +164,12 @@ export class ResendProvider implements ICustomerAccountCreatedEmailSender {
   ): Promise<SendCustomerAccountCreatedEmailResult> {
     return this.sendTemplateEmail(buildDriverJobAcceptedTemplateSend(input));
   }
+
+  async sendDriverDocumentExpiringEmail(
+    input: SendDriverDocumentExpiringEmailInput
+  ): Promise<SendCustomerAccountCreatedEmailResult> {
+    return this.sendTemplateEmail(buildDriverDocumentExpiringTemplateSend(input));
+  }
 }
 
 /**
@@ -241,5 +187,8 @@ export type ICustomerAccountCreatedEmailSender = {
   ): Promise<SendCustomerAccountCreatedEmailResult>;
   sendDriverJobAcceptedEmail(
     input: SendDriverJobAcceptedEmailInput
+  ): Promise<SendCustomerAccountCreatedEmailResult>;
+  sendDriverDocumentExpiringEmail(
+    input: SendDriverDocumentExpiringEmailInput
   ): Promise<SendCustomerAccountCreatedEmailResult>;
 };

@@ -131,11 +131,28 @@ export async function processAdminDriverNotification({
       externalUserId: authUserId,
       title,
       message,
-      data: {
-        event_type: event.event_type,
-        category,
-        driver_id: driverId
-      }
+      data: (() => {
+        const data: Record<string, string> = {
+          event_type: event.event_type,
+          category,
+          driver_id: driverId
+        };
+        const inboxType = asNonEmptyString(payload.inbox_type);
+        const deepLink = asNonEmptyString(payload.deep_link);
+        const jobId =
+          asNonEmptyString(event.job_id) ?? asNonEmptyString(payload.job_id);
+        const documentType = asNonEmptyString(payload.document_type);
+        const daysLeft =
+          typeof payload.days_left === 'number'
+            ? String(payload.days_left)
+            : asNonEmptyString(payload.days_left);
+        if (inboxType) data.inbox_type = inboxType;
+        if (deepLink) data.deep_link = deepLink;
+        if (jobId) data.job_id = jobId;
+        if (documentType) data.document_type = documentType;
+        if (daysLeft) data.days_left = daysLeft;
+        return data;
+      })()
     });
 
     await deliveriesRepository.markDeliveryProviderAccepted(pushDelivery.id, providerMessageId, {

@@ -2,6 +2,7 @@ import { getEnv } from '../../../config/env.js';
 import {
   DEFAULT_SUPPORT_EMAIL,
   DEFAULT_SUPPORT_PHONE,
+  DEFAULT_SUPPORT_WHATSAPP,
   DEFAULT_WEBSITE_URL,
   JOBS_MAILBOX_ADDRESS,
   JOBS_MAILBOX_TEMPLATE_ALIAS,
@@ -13,6 +14,16 @@ import {
   nextRetryAtIso
 } from '../notification-shared.js';
 import type { HandlerDeps } from './handler-deps.js';
+
+function bookingTypeLabel(raw: string | null | undefined): string {
+  const t = (raw ?? '').toLowerCase();
+  if (t === 'oneway') return 'One Way';
+  if (t === 'return') return 'Return';
+  if (t === 'hourly') return 'Hourly';
+  if (t === 'daily') return 'Daily';
+  if (t === 'fleet') return 'Fleet';
+  return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : 'Booking';
+}
 
 export async function processBookingPaymentConfirmed({
   event,
@@ -27,44 +38,65 @@ export async function processBookingPaymentConfirmed({
   const paymentMethod = asNonEmptyString(event.payload.payment_method);
   const amountPaid = asNonEmptyString(event.payload.amount_paid);
   const currency = asNonEmptyString(event.payload.currency);
-  const receiptUrl = asNonEmptyString(event.payload.receipt_url);
-  const bookingLine1Label = asNonEmptyString(event.payload.booking_line_1_label) ?? 'Booking';
-  const bookingLine1Value = asNonEmptyString(event.payload.booking_line_1_value) ?? 'Confirmed';
-  const bookingLine2Label = asNonEmptyString(event.payload.booking_line_2_label) ?? '';
-  const bookingLine2Value = asNonEmptyString(event.payload.booking_line_2_value) ?? '';
-  const bookingLine3Label = asNonEmptyString(event.payload.booking_line_3_label) ?? '';
-  const bookingLine3Value = asNonEmptyString(event.payload.booking_line_3_value) ?? '';
-  const bookingLine4Label = asNonEmptyString(event.payload.booking_line_4_label) ?? '';
-  const bookingLine4Value = asNonEmptyString(event.payload.booking_line_4_value) ?? '';
-  const bookingLine5Label = asNonEmptyString(event.payload.booking_line_5_label) ?? '';
-  const bookingLine5Value = asNonEmptyString(event.payload.booking_line_5_value) ?? '';
-  const bookingLine6Label = asNonEmptyString(event.payload.booking_line_6_label) ?? '';
-  const bookingLine6Value = asNonEmptyString(event.payload.booking_line_6_value) ?? '';
+  const receiptUrl =
+    asNonEmptyString(event.payload.receipt_url) ??
+    getEnv().PUBLIC_WEBSITE_URL ??
+    DEFAULT_WEBSITE_URL;
   const supportEmail = asNonEmptyString(event.payload.support_email) ?? DEFAULT_SUPPORT_EMAIL;
   const supportPhone = asNonEmptyString(event.payload.support_phone) ?? DEFAULT_SUPPORT_PHONE;
+  const supportWhatsapp =
+    asNonEmptyString(event.payload.support_whatsapp) ?? DEFAULT_SUPPORT_WHATSAPP;
   const bookingReference =
     asNonEmptyString(event.payload.booking_reference) ??
     getBookingLineValue(event.payload, 'Reference') ??
     'Pending';
-  const pickupLocation =
+  const bookingTypeLabelValue =
+    asNonEmptyString(event.payload.booking_type_label) ??
+    bookingTypeLabel(asNonEmptyString(event.payload.booking_type));
+  const pickupAddress =
+    asNonEmptyString(event.payload.pickup_address) ??
     asNonEmptyString(event.payload.pickup_location) ??
     asNonEmptyString(event.payload.route_from) ??
     getBookingLineValue(event.payload, 'Pickup') ??
-    '-';
-  const dropoffLocation =
+    '—';
+  const dropoffAddress =
+    asNonEmptyString(event.payload.dropoff_address) ??
     asNonEmptyString(event.payload.dropoff_location) ??
     asNonEmptyString(event.payload.route_to) ??
+    getBookingLineValue(event.payload, 'Drop-off') ??
     getBookingLineValue(event.payload, 'Dropoff') ??
-    '-';
+    '—';
   const pickupTime =
     asNonEmptyString(event.payload.pickup_time) ??
+    getBookingLineValue(event.payload, 'Pickup time') ??
     getBookingLineValue(event.payload, 'Pickup Time') ??
     getBookingLineValue(event.payload, 'When') ??
     paymentDate;
-  const vehicleClass =
+  const flightNumber = asNonEmptyString(event.payload.flight_number) ?? '';
+  const categoryLabel =
+    asNonEmptyString(event.payload.category_label) ??
+    asNonEmptyString(event.payload.vehicle_category_label) ??
+    '—';
+  const vehicleLabel =
+    asNonEmptyString(event.payload.vehicle_label) ??
+    asNonEmptyString(event.payload.vehicle_model_label) ??
     asNonEmptyString(event.payload.vehicle_class) ??
     getBookingLineValue(event.payload, 'Vehicle') ??
-    '-';
+    '—';
+  const passengersLuggage =
+    asNonEmptyString(event.payload.passengers_luggage) ??
+    (() => {
+      const pax = event.payload.passenger_count;
+      const bags = event.payload.bag_count;
+      if (typeof pax === 'number' || typeof bags === 'number') {
+        return `${typeof pax === 'number' ? pax : 0} / ${typeof bags === 'number' ? bags : 0}`;
+      }
+      return getBookingLineValue(event.payload, 'Passengers/Luggage') ?? '—';
+    })();
+
+  const pickupLocation = pickupAddress;
+  const dropoffLocation = dropoffAddress;
+  const vehicleClass = vehicleLabel;
   const adminBookingUrl =
     asNonEmptyString(event.payload.admin_booking_url) ??
     asNonEmptyString(event.payload.receipt_url) ??
@@ -84,9 +116,9 @@ export async function processBookingPaymentConfirmed({
     max_attempts: 3,
     metadata: {
       template_alias: PAYMENT_TEMPLATE_ALIAS,
-      template_version: 'v1',
+      template_version: 'v2',
       render_mode: 'resend_template',
-      reply_to: DEFAULT_SUPPORT_EMAIL,
+      reply_to: supportEmail,
       event_family: 'payment',
       includes_booking_summary: true,
       context_source:
@@ -111,9 +143,6 @@ export async function processBookingPaymentConfirmed({
     if (!currency) {
       throw new Error('Missing required payload.currency for booking_payment_confirmed');
     }
-    if (!receiptUrl) {
-      throw new Error('Missing required payload.receipt_url for booking_payment_confirmed');
-    }
 
     const { providerMessageId } = await resend.sendBookingPaymentConfirmedEmail({
       to: customerEmail,
@@ -124,29 +153,27 @@ export async function processBookingPaymentConfirmed({
       amountPaid,
       currency,
       receiptUrl,
-      bookingLine1Label,
-      bookingLine1Value,
-      bookingLine2Label,
-      bookingLine2Value,
-      bookingLine3Label,
-      bookingLine3Value,
-      bookingLine4Label,
-      bookingLine4Value,
-      bookingLine5Label,
-      bookingLine5Value,
-      bookingLine6Label,
-      bookingLine6Value,
+      bookingReference,
+      bookingTypeLabel: bookingTypeLabelValue,
+      pickupTime,
+      pickupAddress,
+      dropoffAddress,
+      flightNumber,
+      categoryLabel,
+      vehicleLabel,
+      passengersLuggage,
       supportEmail,
-      supportPhone
+      supportPhone,
+      supportWhatsapp
     });
 
     await deliveriesRepository.markDeliveryProviderAccepted(delivery.id, providerMessageId, {
       provider: 'resend',
       event_type: 'booking_payment_confirmed',
       template_alias: PAYMENT_TEMPLATE_ALIAS,
-      template_version: 'v1',
+      template_version: 'v2',
       render_mode: 'resend_template',
-      reply_to: DEFAULT_SUPPORT_EMAIL,
+      reply_to: supportEmail,
       event_family: 'payment',
       includes_booking_summary: true,
       context_source:

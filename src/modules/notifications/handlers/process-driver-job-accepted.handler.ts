@@ -16,6 +16,7 @@ import {
   formatDriverPayoutWholePence,
   type JobUrgency
 } from '../driver-push.formatter.js';
+import { formatUkDateTimeWithLabel } from '../uk-datetime.js';
 import type { HandlerDeps } from './handler-deps.js';
 
 type DriverJobAcceptedRow = {
@@ -444,19 +445,6 @@ export async function processDriverJobAccepted(
 }
 
 function formatScheduledAtForEmail(value: string | null): string {
-  if (!value) {
-    return '';
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleString('en-GB', {
-    timeZone: 'Europe/London',
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  // SSOT: Europe/London + label so drivers abroad still read UK pickup time.
+  return formatUkDateTimeWithLabel(value, { month: 'short' });
 }

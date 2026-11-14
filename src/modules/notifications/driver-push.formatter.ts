@@ -1,4 +1,8 @@
 import { asNonEmptyString, formatDisplayToken } from './notification-shared.js';
+import {
+  formatUkDateTimeShort,
+  formatUkJobCardDateTime
+} from './uk-datetime.js';
 
 export type JobUrgency = 'ASAP' | 'Pre-Book';
 
@@ -68,56 +72,13 @@ export function determineJobUrgency(scheduledAt: string | null): JobUrgency | nu
   return diffMinutes <= 60 ? 'ASAP' : 'Pre-Book';
 }
 
-/** Match formatDateTime din JobCard. */
+/** Match formatDateTime din JobCard — always Europe/London (not server local). */
 export function formatJobCardDateTime(value: string | null): string | null {
-  if (!value) {
-    return null;
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  const time = date.toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-    timeZone: 'Europe/London'
-  });
-
-  if (date.toDateString() === today.toDateString()) {
-    return `Today, ${time}`;
-  }
-  if (date.toDateString() === tomorrow.toDateString()) {
-    return `Tomorrow, ${time}`;
-  }
-  const dateStr = date.toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'Europe/London'
-  });
-  return `${dateStr}, ${time}`;
+  return formatUkJobCardDateTime(value);
 }
 
 function formatDriverPushDateTimeShort(value: string | null): string | null {
-  if (!value) {
-    return null;
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-  return parsed.toLocaleString('en-GB', {
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Europe/London'
-  });
+  return formatUkDateTimeShort(value);
 }
 
 function formatLocationLine(address: string): string {

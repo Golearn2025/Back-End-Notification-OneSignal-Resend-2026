@@ -40,6 +40,7 @@ Dacă vreți totuși să împingă HTML din Git către API:
 | `payment_success_customer_v1` | Plată booking confirmată (client) |
 | `jobs_mailbox_booking_confirmed_v1` | Notificare către mailbox joburi |
 | `driver_job_accepted_v1` | Șofer: job acceptat |
+| `driver_document_expiring_v1` | Șofer: document expiră (30/15/1) — **de publicat** |
 
 Subiectul și `reply_to` pot fi suprascrise de la API (așa face deja `ResendProvider`).
 
