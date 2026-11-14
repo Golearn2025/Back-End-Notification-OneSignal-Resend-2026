@@ -14,6 +14,7 @@ describe('OneSignal idempotency + timeout', () => {
     delete process.env.ONESIGNAL_APP_ID;
     delete process.env.ONESIGNAL_REST_API_KEY;
     delete process.env.ONESIGNAL_ANDROID_CHANNEL_ID;
+    delete process.env.ONESIGNAL_PREFER_DASHBOARD_CHANNEL;
     delete process.env.PORT;
     delete process.env.INTERNAL_API_SECRET;
     delete process.env.SUPABASE_URL;
@@ -65,6 +66,8 @@ describe('OneSignal idempotency + timeout', () => {
     // Without dashboard UUID → app channel fallback + resource name `message`
     expect(body.ios_sound).toBe('message.caf');
     expect(body.android_sound).toBe('message');
+    expect(body.small_icon).toBe('ic_stat_onesignal_default');
+    expect(body.large_icon).toBe('ic_onesignal_large_icon_default');
     expect(body.existing_android_channel_id).toBe('driver_alerts_v2');
     expect(body.android_channel_id).toBeUndefined();
   });
