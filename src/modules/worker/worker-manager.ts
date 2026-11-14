@@ -67,13 +67,14 @@ export class WorkerManager {
     }
 
     while (this.running) {
+      let morePendingLikely = false;
       if (this.processing) {
         this.workerLogger.warn(
           { mode: this.mode, pollIntervalMs: this.pollIntervalMs },
           'Skipping poll tick because previous batch is still running'
         );
       } else {
-        await this.processSingleBatch();
+        morePendingLikely = await this.processSingleBatch();
       }
 
       if (!this.running) {
@@ -81,6 +82,10 @@ export class WorkerManager {
       }
       if (this.wakeUpPending) {
         this.wakeUpPending = false;
+        continue;
+      }
+      // Do not sleep the fixed poll interval while the queue still has work.
+      if (morePendingLikely) {
         continue;
       }
       await this.waitForNextTick();
@@ -137,16 +142,23 @@ export class WorkerManager {
     }, this.wakeUpDebounceMs);
   }
 
-  private async processSingleBatch(): Promise<void> {
+  private async processSingleBatch(): Promise<boolean> {
     this.processing = true;
     try {
       this.workerLogger.info(
         { mode: this.mode, batchSize: this.batchSize },
         'Worker batch start'
       );
-      const stats = await this.pollingWorker.runOnce(this.batchSize);
+      const stats = (await this.pollingWorker.runOnce(this.batchSize)) as {
+        morePendingLikely?: boolean;
+        fetched?: number;
+      };
       await this.retryWorker.runOnce();
       this.workerLogger.info({ mode: this.mode, stats }, 'Worker batch end');
+      if (typeof stats?.morePendingLikely === 'boolean') {
+        return stats.morePendingLikely;
+      }
+      return typeof stats?.fetched === 'number' && stats.fetched >= this.batchSize;
     } finally {
       this.processing = false;
     }

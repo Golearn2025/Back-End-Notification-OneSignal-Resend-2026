@@ -6,6 +6,7 @@ describe('processDriverJobAvailable targeting', () => {
     const markEventDelivered = vi.fn();
     const markEventFailedRetryable = vi.fn();
     const markEventPartiallyDelivered = vi.fn();
+    const markEventCancelled = vi.fn();
     const createDelivery = vi.fn(async (input: any) => ({
       id: `del-${input.recipient_id}`,
       status: 'queued',
@@ -28,9 +29,9 @@ describe('processDriverJobAvailable targeting', () => {
       new Set(authUserIds)
     );
 
-    const sendPushToExternalUserId = vi.fn(async ({ externalUserId }: { externalUserId: string }) => ({
-      providerMessageId: `msg-${externalUserId}`,
-      responseMetadata: {}
+    const sendPushToExternalUserIds = vi.fn(async ({ externalUserIds }: { externalUserIds: string[] }) => ({
+      providerMessageId: `msg-${externalUserIds.join(',')}`,
+      responseMetadata: { invalidExternalIds: [] }
     }));
 
     await processDriverJobAvailable(
@@ -55,17 +56,19 @@ describe('processDriverJobAvailable targeting', () => {
         eventsRepository: {
           markEventDelivered,
           markEventFailedRetryable,
-          markEventPartiallyDelivered
+          markEventPartiallyDelivered,
+          markEventCancelled
         } as any,
         deliveriesRepository: {
           createDelivery,
           markDeliverySending,
           markDeliveryProviderAccepted,
-          markDeliveryFailedRetryable
+          markDeliveryFailedRetryable,
+          markDeliveryFailedFinal: vi.fn()
         } as any
       },
       {
-        oneSignal: { sendPushToExternalUserId } as any,
+        oneSignal: { sendPushToExternalUserIds } as any,
         driverEligibilityService: {
           resolveEligibleDrivers,
           resolveDriversByIds,
@@ -73,7 +76,7 @@ describe('processDriverJobAvailable targeting', () => {
           resolveActiveExternalUserIds,
           getLatestLegFinancial: vi.fn()
         } as any,
-        db: {} as any
+        db: { rpc: vi.fn() } as any
       }
     );
 
@@ -82,9 +85,9 @@ describe('processDriverJobAvailable targeting', () => {
       driverIds: ['d2']
     });
     expect(resolveEligibleDrivers).not.toHaveBeenCalled();
-    expect(sendPushToExternalUserId).toHaveBeenCalledTimes(1);
-    expect(sendPushToExternalUserId).toHaveBeenCalledWith(
-      expect.objectContaining({ externalUserId: 'auth-d2' })
+    expect(sendPushToExternalUserIds).toHaveBeenCalledTimes(1);
+    expect(sendPushToExternalUserIds).toHaveBeenCalledWith(
+      expect.objectContaining({ externalUserIds: ['auth-d2'] })
     );
     expect(createDelivery).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -96,13 +99,14 @@ describe('processDriverJobAvailable targeting', () => {
     expect(markEventDelivered).toHaveBeenCalledWith('evt-1');
   });
 
-  it('keeps broadcast for open wave without driver_id', async () => {
+  it('sends open-wave recipients in one OneSignal request with explicit list', async () => {
     const markEventDelivered = vi.fn();
     const createDelivery = vi.fn(async (input: any) => ({
       id: `del-${input.recipient_id}`,
       status: 'queued',
       ...input
     }));
+    const markDeliveryProviderAccepted = vi.fn();
 
     const resolveEligibleDrivers = vi.fn(async () => [
       { driverId: 'd1', authUserId: 'a1' },
@@ -113,9 +117,9 @@ describe('processDriverJobAvailable targeting', () => {
     const resolveActiveExternalUserIds = vi.fn(async ({ authUserIds }: { authUserIds: string[] }) =>
       new Set(authUserIds)
     );
-    const sendPushToExternalUserId = vi.fn(async ({ externalUserId }: { externalUserId: string }) => ({
-      providerMessageId: `msg-${externalUserId}`,
-      responseMetadata: {}
+    const sendPushToExternalUserIds = vi.fn(async () => ({
+      providerMessageId: 'msg-bulk',
+      responseMetadata: { invalidExternalIds: [] }
     }));
 
     await processDriverJobAvailable(
@@ -140,17 +144,19 @@ describe('processDriverJobAvailable targeting', () => {
         eventsRepository: {
           markEventDelivered,
           markEventFailedRetryable: vi.fn(),
-          markEventPartiallyDelivered: vi.fn()
+          markEventPartiallyDelivered: vi.fn(),
+          markEventCancelled: vi.fn()
         } as any,
         deliveriesRepository: {
           createDelivery,
           markDeliverySending: vi.fn(),
-          markDeliveryProviderAccepted: vi.fn(),
-          markDeliveryFailedRetryable: vi.fn()
+          markDeliveryProviderAccepted,
+          markDeliveryFailedRetryable: vi.fn(),
+          markDeliveryFailedFinal: vi.fn()
         } as any
       },
       {
-        oneSignal: { sendPushToExternalUserId } as any,
+        oneSignal: { sendPushToExternalUserIds } as any,
         driverEligibilityService: {
           resolveEligibleDrivers,
           resolveDriversByIds,
@@ -158,13 +164,76 @@ describe('processDriverJobAvailable targeting', () => {
           resolveActiveExternalUserIds,
           getLatestLegFinancial: vi.fn()
         } as any,
-        db: {} as any
+        db: { rpc: vi.fn() } as any
       }
     );
 
     expect(resolveEligibleDrivers).toHaveBeenCalled();
     expect(resolveDriversByIds).not.toHaveBeenCalled();
-    expect(sendPushToExternalUserId).toHaveBeenCalledTimes(2);
+    expect(sendPushToExternalUserIds).toHaveBeenCalledTimes(1);
+    expect(sendPushToExternalUserIds).toHaveBeenCalledWith(
+      expect.objectContaining({ externalUserIds: ['a1', 'a2'] })
+    );
+    expect(markDeliveryProviderAccepted).toHaveBeenCalledTimes(2);
     expect(markEventDelivered).toHaveBeenCalledWith('evt-2');
+  });
+
+  it('cancels send when job is no longer offerable', async () => {
+    const markEventCancelled = vi.fn();
+    const sendPushToExternalUserIds = vi.fn();
+
+    await processDriverJobAvailable(
+      {
+        event: {
+          id: 'evt-3',
+          organization_id: 'org-1',
+          event_type: 'driver_job_available',
+          source_module: 'dispatch',
+          priority: 'high',
+          status: 'processing',
+          customer_id: null,
+          driver_id: null,
+          payload: {
+            job_id: 'leg-1',
+            booking_reference: 'CB-X',
+            booking_type: 'oneway'
+          }
+        } as any,
+        eventsRepository: {
+          markEventDelivered: vi.fn(),
+          markEventFailedRetryable: vi.fn(),
+          markEventPartiallyDelivered: vi.fn(),
+          markEventCancelled
+        } as any,
+        deliveriesRepository: {
+          createDelivery: vi.fn(),
+          markDeliverySending: vi.fn(),
+          markDeliveryProviderAccepted: vi.fn(),
+          markDeliveryFailedRetryable: vi.fn(),
+          markDeliveryFailedFinal: vi.fn()
+        } as any
+      },
+      {
+        oneSignal: { sendPushToExternalUserIds } as any,
+        driverEligibilityService: {
+          resolveEligibleDrivers: vi.fn(),
+          resolveDriversByIds: vi.fn(),
+          resolvePremiumDriverIds: vi.fn(),
+          resolveActiveExternalUserIds: vi.fn(),
+          getLatestLegFinancial: vi.fn()
+        } as any,
+        db: {
+          rpc: vi.fn(async () => ({ data: false, error: null })),
+          from: vi.fn(() => ({
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn(async () => ({ data: null, error: null }))
+          }))
+        } as any
+      }
+    );
+
+    expect(markEventCancelled).toHaveBeenCalledWith('evt-3', 'job_not_offerable');
+    expect(sendPushToExternalUserIds).not.toHaveBeenCalled();
   });
 });

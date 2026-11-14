@@ -165,6 +165,37 @@ export async function processDriverJobAvailable(
   const title = asNonEmptyString(event.payload.push_title) ?? defaultPush.title;
   const message = asNonEmptyString(event.payload.push_message) ?? defaultPush.message;
 
+  // Already cancelled (accept/cancel path) — never send, including retries.
+  if (event.status === 'cancelled') {
+    logger.info({ eventId: event.id, bookingLegId }, 'Skipping cancelled driver_job_available event');
+    return;
+  }
+
+  // Offerability gate (first send + retry + in-flight processing):
+  // job accepted/cancelled/unpaid must stop remaining provider sends.
+  if (bookingLegId) {
+    try {
+      const { data: offerable, error: offerErr } = await (db as any).rpc('job_leg_is_offerable', {
+        p_booking_leg_id: bookingLegId
+      });
+      if (offerErr) {
+        throw new Error(offerErr.message);
+      }
+      if (offerable !== true) {
+        logger.info(
+          { eventId: event.id, bookingLegId, eventStatus: event.status },
+          'Job no longer offerable — cancelling notification event before send'
+        );
+        await eventsRepository.markEventCancelled(event.id, 'job_not_offerable');
+        return;
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'job_leg_is_offerable check failed';
+      await eventsRepository.markEventFailedRetryable(event.id, reason, nextRetryAtIso());
+      return;
+    }
+  }
+
   const targetedDriverId =
     asNonEmptyString(event.driver_id) ??
     asNonEmptyString(event.payload.exclusive_driver_id);
@@ -235,6 +266,13 @@ export async function processDriverJobAvailable(
     pushData.booking_reference = bookingReference;
   }
 
+  type PendingPush = {
+    driverId: string;
+    authUserId: string;
+    deliveryId: string;
+  };
+
+  const pending: PendingPush[] = [];
   let successCount = 0;
   let failCount = 0;
 
@@ -260,7 +298,8 @@ export async function processDriverJobAvailable(
         vehicle_model_id: vehicleModelId,
         vehicle_category_id: vehicleCategoryId,
         push_preview_title: title,
-        push_preview_message: message
+        push_preview_message: message,
+        dispatch_wave: dispatchWave
       }
     });
 
@@ -270,23 +309,76 @@ export async function processDriverJobAvailable(
     }
 
     await deliveriesRepository.markDeliverySending(delivery.id);
-    try {
-      const { providerMessageId, responseMetadata } = await oneSignal.sendPushToExternalUserId({
-        externalUserId: driver.authUserId,
-        title,
-        message,
-        data: pushData
-      });
-      await deliveriesRepository.markDeliveryProviderAccepted(delivery.id, providerMessageId, {
+    pending.push({
+      driverId: driver.driverId,
+      authUserId: driver.authUserId,
+      deliveryId: delivery.id
+    });
+  }
+
+  if (pending.length === 0) {
+    if (successCount > 0) {
+      await eventsRepository.markEventDelivered(event.id);
+      return;
+    }
+    await eventsRepository.markEventFailedRetryable(
+      event.id,
+      'No active push subscription',
+      nextRetryAtIso()
+    );
+    return;
+  }
+
+  // Same job + wave + shared title/body → one OneSignal request with explicit recipient list.
+  try {
+    const { providerMessageId, responseMetadata } = await oneSignal.sendPushToExternalUserIds({
+      externalUserIds: pending.map((item) => item.authUserId),
+      title,
+      message,
+      data: pushData
+    });
+    const invalid = new Set(responseMetadata.invalidExternalIds ?? []);
+
+    for (const item of pending) {
+      if (invalid.has(item.authUserId)) {
+        await deliveriesRepository.markDeliveryFailedRetryable(
+          item.deliveryId,
+          `OneSignal invalid_aliases.external_id=${item.authUserId}`,
+          nextRetryAtIso()
+        );
+        failCount += 1;
+        continue;
+      }
+      await deliveriesRepository.markDeliveryProviderAccepted(item.deliveryId, providerMessageId, {
         provider: 'onesignal',
         event_type: 'driver_job_available',
         response_metadata: responseMetadata,
-        booking_reference: bookingReference
+        booking_reference: bookingReference,
+        bulk_recipient_count: pending.length
       });
       successCount += 1;
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : 'OneSignal push send failed';
-      await deliveriesRepository.markDeliveryFailedRetryable(delivery.id, reason, nextRetryAtIso());
+    }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'OneSignal push send failed';
+    const retryAfterSeconds =
+      error && typeof error === 'object' && 'retryAfterSeconds' in error
+        ? Number((error as { retryAfterSeconds?: number }).retryAfterSeconds)
+        : undefined;
+    const permanent =
+      error && typeof error === 'object' && 'permanent' in error
+        ? Boolean((error as { permanent?: boolean }).permanent)
+        : false;
+
+    for (const item of pending) {
+      if (permanent) {
+        await deliveriesRepository.markDeliveryFailedFinal(item.deliveryId, reason);
+      } else {
+        await deliveriesRepository.markDeliveryFailedRetryable(
+          item.deliveryId,
+          reason,
+          nextRetryAtIso(retryAfterSeconds)
+        );
+      }
       failCount += 1;
     }
   }

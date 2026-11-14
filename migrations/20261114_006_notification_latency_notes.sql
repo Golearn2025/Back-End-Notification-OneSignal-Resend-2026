@@ -1,0 +1,28 @@
+-- REVIEW ONLY — do not apply automatically.
+-- Notes for notification latency / reliability work (2026-11-14).
+--
+-- Confirmed production evidence (2026-11-13 admin campaign "Test Notifications"):
+--   89 admin_driver_* events enqueued ~09:09:21–09:09:37 UTC
+--   80 OneSignal provider_accepted deliveries
+--   78 accepted by ~09:12:45 (~3m24s first wave); 2 later after retry
+--   9 events remained failed_retryable with retry_count >> max_retry_count (code did not enforce cap)
+--
+-- Application-side fixes land in review/notification-latency-reliability (no DB schema required for core path):
+--   - bulk OneSignal for shared-content job offers + admin campaigns
+--   - drain worker when queue non-empty (no fixed 30s idle between full batches)
+--   - reserved capacity for driver_job_* vs admin/email
+--   - enforce max_retry_count → dead_letter
+--   - reclaim stuck status=processing after timeout
+--   - offerability gate before send (RPC job_leg_is_offerable — already in DB if Stage1/dispatch present)
+--
+-- Optional follow-ups (separate review; not applied here):
+--   1) Admin enqueue RPC could emit one campaign event + recipient list instead of N events
+--      (reduces claim overhead; deliveries remain per-driver).
+--   2) Unique index / stable idempotency on deliveries for timeout races (if not already present).
+--   3) Reminder scheduler invalidation on reschedule — trip_reminder_* types exist in app types
+--      but no processor/enqueue path was found in this repo at audit time.
+--
+-- Dependency check before enabling offerability cancel path in production:
+--   select proname from pg_proc where proname = 'job_leg_is_offerable';
+-- If missing, do not deploy offerability cancel without the Stage1/dispatch migration that defines it.
+SELECT 1;

@@ -11,8 +11,41 @@ export const JOBS_MAILBOX_TEMPLATE_ALIAS = 'jobs_mailbox_booking_confirmed_v1';
 export const DRIVER_JOB_ACCEPTED_TEMPLATE_ALIAS = 'driver_job_accepted_v1';
 export const JOBS_MAILBOX_ADDRESS = 'newjobs@vantage-lane.com';
 
-export function nextRetryAtIso(): string {
-  return new Date(Date.now() + RETRY_MS).toISOString();
+/** Job dispatch / accept — must not wait behind admin campaigns or bulk email. */
+export const URGENT_JOB_EVENT_TYPES = new Set([
+  'driver_job_available',
+  'driver_job_accepted'
+]);
+
+export const ADMIN_DRIVER_EVENT_TYPES = new Set([
+  'admin_driver_system',
+  'admin_driver_documents',
+  'admin_driver_jobs'
+]);
+
+export function nextRetryAtIso(retryAfterSeconds?: number): string {
+  const delayMs =
+    typeof retryAfterSeconds === 'number' && Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+      ? Math.min(Math.max(retryAfterSeconds, 1) * 1000, 15 * 60 * 1000)
+      : RETRY_MS;
+  return new Date(Date.now() + delayMs).toISOString();
+}
+
+export function isUrgentJobEventType(eventType: string): boolean {
+  return URGENT_JOB_EVENT_TYPES.has(eventType);
+}
+
+export function isAdminDriverEventType(eventType: string): boolean {
+  return ADMIN_DRIVER_EVENT_TYPES.has(eventType);
+}
+
+export function adminPushFingerprint(input: {
+  organizationId: string;
+  title: string;
+  message: string;
+  eventType: string;
+}): string {
+  return [input.organizationId, input.eventType, input.title, input.message].join('\u0000');
 }
 
 export function isDeliverySucceeded(status: NotificationDeliveryStatus): boolean {
