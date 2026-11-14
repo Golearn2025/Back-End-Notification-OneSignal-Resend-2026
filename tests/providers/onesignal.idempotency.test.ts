@@ -61,8 +61,8 @@ describe('OneSignal idempotency + timeout', () => {
     expect(isOneSignalIdempotencyKey(body.idempotency_key)).toBe(true);
     // Must match Driver alert-sound.ts / DriverAlertChannels.kt
     expect(body.ios_sound).toBe('message.caf');
-    expect(body.android_sound).toBe('message');
     expect(body.existing_android_channel_id).toBe('driver_alerts_v2');
+    expect(body.android_sound).toBeUndefined();
     expect(body.android_channel_id).toBeUndefined();
   });
 
