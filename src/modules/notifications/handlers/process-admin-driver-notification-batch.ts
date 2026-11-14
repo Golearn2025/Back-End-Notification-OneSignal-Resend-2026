@@ -10,8 +10,6 @@ import {
 import type { NotificationEvent } from '../notification.types.js';
 import type { NotificationDeliveriesRepository } from '../notification-deliveries.repository.js';
 import type { NotificationEventsRepository } from '../notification-events.repository.js';
-import { processAdminDriverNotification } from './process-admin-driver-notification.handler.js';
-
 type BatchDeps = {
   events: NotificationEvent[];
   eventsRepository: NotificationEventsRepository;
@@ -46,19 +44,6 @@ export async function processAdminDriverNotificationBatch({
     return;
   }
 
-  if (events.length === 1) {
-    const only = events[0];
-    if (!only) {
-      return;
-    }
-    await processAdminDriverNotification({
-      event: only,
-      eventsRepository,
-      deliveriesRepository
-    });
-    return;
-  }
-
   const groups = new Map<string, NotificationEvent[]>();
   for (const event of events) {
     const payload = event.payload ?? {};
@@ -82,20 +67,9 @@ export async function processAdminDriverNotificationBatch({
     groups.set(key, bucket);
   }
 
+  // Always use sendAdminGroup (incl. size 1) so injected db/oneSignal are honored in tests
+  // and production batching stays consistent.
   for (const group of groups.values()) {
-    if (group.length === 1) {
-      const only = group[0];
-      if (!only) {
-        continue;
-      }
-      await processAdminDriverNotification({
-        event: only,
-        eventsRepository,
-        deliveriesRepository
-      });
-      continue;
-    }
-
     await sendAdminGroup({
       group,
       eventsRepository,

@@ -203,7 +203,8 @@ describe('processDriverJobAvailable targeting', () => {
           markEventDelivered: vi.fn(),
           markEventFailedRetryable: vi.fn(),
           markEventPartiallyDelivered: vi.fn(),
-          markEventCancelled
+          markEventCancelled,
+          markEventDeadLetter: vi.fn()
         } as any,
         deliveriesRepository: {
           createDelivery: vi.fn(),

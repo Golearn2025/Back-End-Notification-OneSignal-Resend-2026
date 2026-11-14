@@ -171,8 +171,8 @@ export async function processDriverJobAvailable(
     return;
   }
 
-  // Offerability gate (first send + retry + in-flight processing):
-  // job accepted/cancelled/unpaid must stop remaining provider sends.
+  // Offerability gate (first send + retry + in-flight processing).
+  // Fail closed: missing RPC / check errors must NOT send unverified offers.
   if (bookingLegId) {
     try {
       const { data: offerable, error: offerErr } = await (db as any).rpc('job_leg_is_offerable', {
@@ -191,7 +191,14 @@ export async function processDriverJobAvailable(
       }
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'job_leg_is_offerable check failed';
-      await eventsRepository.markEventFailedRetryable(event.id, reason, nextRetryAtIso());
+      logger.warn(
+        { eventId: event.id, bookingLegId, reason },
+        'Offerability check unavailable — blocking send (fail closed)'
+      );
+      await eventsRepository.markEventDeadLetter(
+        event.id,
+        `offerability_check_unavailable: ${reason}`
+      );
       return;
     }
   }
