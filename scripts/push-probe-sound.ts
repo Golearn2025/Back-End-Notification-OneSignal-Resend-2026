@@ -22,8 +22,8 @@ async function main() {
   const started = performance.now();
   const result = await provider.sendPushToExternalUserIds({
     externalUserIds: [YOU_EXTERNAL_ID],
-    title: 'Probe sunet VL #9',
-    message: 'android_sound=message + canal dashboard. Testeaza cu app DESCHIS si in BACKGROUND.',
+    title: 'Probe sunet VL #11',
+    message: 'Canal APP driver_alerts_v2 + message. Fara play in-app. Un sunet.',
     data: { probe: 'driver_alert_sound', ts: String(Date.now()) },
     idempotencyKey
   });

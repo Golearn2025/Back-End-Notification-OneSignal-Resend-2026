@@ -29,6 +29,7 @@ describe('OneSignal idempotency + timeout', () => {
     process.env.ONESIGNAL_APP_ID = 'app-id';
     process.env.ONESIGNAL_REST_API_KEY = 'rest-key';
     delete process.env.ONESIGNAL_ANDROID_CHANNEL_ID;
+    delete process.env.ONESIGNAL_PREFER_DASHBOARD_CHANNEL;
     resetEnvCacheForTests();
   }
 
@@ -68,10 +69,11 @@ describe('OneSignal idempotency + timeout', () => {
     expect(body.android_channel_id).toBeUndefined();
   });
 
-  it('uses dashboard android_channel_id when ONESIGNAL_ANDROID_CHANNEL_ID is set', async () => {
+  it('uses dashboard android_channel_id when prefer-dashboard is enabled', async () => {
     stubEnv();
     const dashboardId = '11111111-2222-4333-8444-555555555555';
     process.env.ONESIGNAL_ANDROID_CHANNEL_ID = dashboardId;
+    process.env.ONESIGNAL_PREFER_DASHBOARD_CHANNEL = '1';
     resetEnvCacheForTests();
 
     const fetchMock = vi.fn(async () => {
