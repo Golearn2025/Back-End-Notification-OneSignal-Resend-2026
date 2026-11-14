@@ -51,14 +51,13 @@ describe('env validation', () => {
     ).toThrowError(/Invalid environment variables/);
   });
 
-  it('rejects RESEND_API_KEY that is not a Resend secret (must start with re_)', () => {
-    expect(() =>
-      parseEnv({
-        ...baseEnv,
-        RESEND_API_KEY: 'sk_live_not_resend',
-        RESEND_FROM_EMAIL: 'Test <test@example.com>'
-      })
-    ).toThrowError(/Invalid environment variables/);
+  it('accepts non-empty RESEND_API_KEY without requiring re_ prefix', () => {
+    const parsed = parseEnv({
+      ...baseEnv,
+      RESEND_API_KEY: 'sk_live_not_resend',
+      RESEND_FROM_EMAIL: 'Test <test@example.com>'
+    });
+    expect(parsed.RESEND_API_KEY).toBe('sk_live_not_resend');
   });
 
   it('requires RESEND_FROM_EMAIL when RESEND_API_KEY is set', () => {
@@ -108,12 +107,11 @@ describe('env validation', () => {
     expect(parsed.RESEND_API_KEY).toBeUndefined();
   });
 
-  it('rejects invalid RESEND_TEMPLATE_AUDIT_API_KEY format', () => {
-    expect(() =>
-      parseEnv({
-        ...baseEnv,
-        RESEND_TEMPLATE_AUDIT_API_KEY: 'not_re_key'
-      })
-    ).toThrowError(/Invalid environment variables/);
+  it('accepts non-empty RESEND_TEMPLATE_AUDIT_API_KEY without requiring re_ prefix', () => {
+    const parsed = parseEnv({
+      ...baseEnv,
+      RESEND_TEMPLATE_AUDIT_API_KEY: 'not_re_key'
+    });
+    expect(parsed.RESEND_TEMPLATE_AUDIT_API_KEY).toBe('not_re_key');
   });
 });

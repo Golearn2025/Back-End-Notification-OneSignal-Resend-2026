@@ -68,13 +68,16 @@ export class WorkerManager {
 
     while (this.running) {
       let morePendingLikely = false;
+      let lanesBusy = false;
       if (this.processing) {
         this.workerLogger.warn(
           { mode: this.mode, pollIntervalMs: this.pollIntervalMs },
           'Skipping poll tick because previous batch is still running'
         );
       } else {
-        morePendingLikely = await this.processSingleBatch();
+        const tick = await this.processSingleBatch();
+        morePendingLikely = tick.morePendingLikely;
+        lanesBusy = tick.lanesBusy;
       }
 
       if (!this.running) {
@@ -84,8 +87,14 @@ export class WorkerManager {
         this.wakeUpPending = false;
         continue;
       }
-      // Do not sleep the fixed poll interval while the queue still has work.
+      // Do not sleep the fixed poll interval while claimable work remains.
       if (morePendingLikely) {
+        continue;
+      }
+      // Background admin still running and/or category backlog while slots are full:
+      // brief yield so requestWakeUp can start urgent/interrupt lanes without a 30s pause.
+      if (lanesBusy) {
+        await this.sleep(Math.min(50, this.pollIntervalMs));
         continue;
       }
       await this.waitForNextTick();
@@ -142,7 +151,7 @@ export class WorkerManager {
     }, this.wakeUpDebounceMs);
   }
 
-  private async processSingleBatch(): Promise<boolean> {
+  private async processSingleBatch(): Promise<{ morePendingLikely: boolean; lanesBusy: boolean }> {
     this.processing = true;
     try {
       this.workerLogger.info(
@@ -152,13 +161,29 @@ export class WorkerManager {
       const stats = (await this.pollingWorker.runOnce(this.batchSize)) as {
         morePendingLikely?: boolean;
         fetched?: number;
+        backlog?: { urgent?: boolean; admin?: boolean; email?: boolean };
+        lanes?: { adminBusy?: boolean; urgentBusy?: boolean; emailBusy?: boolean };
       };
       await this.retryWorker.runOnce();
       this.workerLogger.info({ mode: this.mode, stats }, 'Worker batch end');
+      const lanesBusy = Boolean(
+        stats?.lanes?.adminBusy ||
+          stats?.lanes?.urgentBusy ||
+          stats?.lanes?.emailBusy ||
+          stats?.backlog?.admin ||
+          stats?.backlog?.urgent ||
+          stats?.backlog?.email
+      );
       if (typeof stats?.morePendingLikely === 'boolean') {
-        return stats.morePendingLikely;
+        return { morePendingLikely: stats.morePendingLikely, lanesBusy };
       }
-      return typeof stats?.fetched === 'number' && stats.fetched >= this.batchSize;
+      if (lanesBusy) {
+        return { morePendingLikely: false, lanesBusy: true };
+      }
+      return {
+        morePendingLikely: typeof stats?.fetched === 'number' && stats.fetched >= this.batchSize,
+        lanesBusy: false
+      };
     } finally {
       this.processing = false;
     }

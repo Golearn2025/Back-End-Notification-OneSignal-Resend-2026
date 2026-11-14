@@ -11,7 +11,25 @@ import {
 import { loadBookingNotificationContext } from '../booking-notification-context.service.js';
 import { DriverEligibilityService } from '../driver-eligibility.service.js';
 import { asNonEmptyString, isDeliverySucceeded, nextRetryAtIso } from '../notification-shared.js';
+import { buildOneSignalIdempotencyKey } from '../onesignal-idempotency.js';
 import type { HandlerDeps } from './handler-deps.js';
+
+async function assertJobStillOfferable(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  bookingLegId: string
+): Promise<'offerable' | 'not_offerable' | 'check_unavailable'> {
+  try {
+    const { data: offerable, error: offerErr } = await (db as any).rpc('job_leg_is_offerable', {
+      p_booking_leg_id: bookingLegId
+    });
+    if (offerErr) {
+      throw new Error(offerErr.message);
+    }
+    return offerable === true ? 'offerable' : 'not_offerable';
+  } catch {
+    return 'check_unavailable';
+  }
+}
 
 function asPence(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -171,33 +189,25 @@ export async function processDriverJobAvailable(
     return;
   }
 
-  // Offerability gate (first send + retry + in-flight processing).
-  // Fail closed: missing RPC / check errors must NOT send unverified offers.
+  // Early offerability gate (before recipient fan-out). Fail closed if RPC missing.
   if (bookingLegId) {
-    try {
-      const { data: offerable, error: offerErr } = await (db as any).rpc('job_leg_is_offerable', {
-        p_booking_leg_id: bookingLegId
-      });
-      if (offerErr) {
-        throw new Error(offerErr.message);
-      }
-      if (offerable !== true) {
-        logger.info(
-          { eventId: event.id, bookingLegId, eventStatus: event.status },
-          'Job no longer offerable — cancelling notification event before send'
-        );
-        await eventsRepository.markEventCancelled(event.id, 'job_not_offerable');
-        return;
-      }
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : 'job_leg_is_offerable check failed';
+    const early = await assertJobStillOfferable(db, bookingLegId);
+    if (early === 'not_offerable') {
+      logger.info(
+        { eventId: event.id, bookingLegId, eventStatus: event.status },
+        'Job no longer offerable — cancelling notification event before send'
+      );
+      await eventsRepository.markEventCancelled(event.id, 'job_not_offerable');
+      return;
+    }
+    if (early === 'check_unavailable') {
       logger.warn(
-        { eventId: event.id, bookingLegId, reason },
+        { eventId: event.id, bookingLegId },
         'Offerability check unavailable — blocking send (fail closed)'
       );
       await eventsRepository.markEventDeadLetter(
         event.id,
-        `offerability_check_unavailable: ${reason}`
+        'offerability_check_unavailable: job_leg_is_offerable RPC failed or missing'
       );
       return;
     }
@@ -336,14 +346,52 @@ export async function processDriverJobAvailable(
     return;
   }
 
+  // Revalidate immediately before provider call (accept/cancel can race during fan-out).
+  // NOTE: if the HTTP request has already left to OneSignal, an accept/cancel that happens
+  // after dispatch cannot be recalled — residual race is documented for ops, not solvable here.
+  if (bookingLegId) {
+    const late = await assertJobStillOfferable(db, bookingLegId);
+    if (late !== 'offerable') {
+      const reason =
+        late === 'not_offerable'
+          ? 'job_not_offerable_before_provider_send'
+          : 'offerability_check_unavailable_before_provider_send';
+      logger.info(
+        { eventId: event.id, bookingLegId, reason },
+        'Stopping remaining job push sends after late offerability failure'
+      );
+      for (const item of pending) {
+        await deliveriesRepository.markDeliveryFailedFinal(item.deliveryId, reason);
+        failCount += 1;
+      }
+      if (late === 'not_offerable') {
+        await eventsRepository.markEventCancelled(event.id, reason);
+      } else {
+        await eventsRepository.markEventDeadLetter(event.id, reason);
+      }
+      return;
+    }
+  }
+
+  const externalUserIds = pending.map((item) => item.authUserId);
+  const idempotencyKey = buildOneSignalIdempotencyKey({
+    eventId: event.id,
+    externalUserIds,
+    title,
+    message,
+    data: pushData
+  });
+
   // Same job + wave + shared title/body → one OneSignal request with explicit recipient list.
   try {
-    const { providerMessageId, responseMetadata } = await oneSignal.sendPushToExternalUserIds({
-      externalUserIds: pending.map((item) => item.authUserId),
-      title,
-      message,
-      data: pushData
-    });
+    const { providerMessageId, responseMetadata, idempotencyKey: usedKey } =
+      await oneSignal.sendPushToExternalUserIds({
+        externalUserIds,
+        title,
+        message,
+        data: pushData,
+        idempotencyKey
+      });
     const invalid = new Set(responseMetadata.invalidExternalIds ?? []);
 
     for (const item of pending) {
@@ -356,14 +404,28 @@ export async function processDriverJobAvailable(
         failCount += 1;
         continue;
       }
-      await deliveriesRepository.markDeliveryProviderAccepted(item.deliveryId, providerMessageId, {
-        provider: 'onesignal',
-        event_type: 'driver_job_available',
-        response_metadata: responseMetadata,
-        booking_reference: bookingReference,
-        bulk_recipient_count: pending.length
-      });
-      successCount += 1;
+      try {
+        await deliveriesRepository.markDeliveryProviderAccepted(item.deliveryId, providerMessageId, {
+          provider: 'onesignal',
+          event_type: 'driver_job_available',
+          response_metadata: responseMetadata,
+          booking_reference: bookingReference,
+          bulk_recipient_count: pending.length,
+          onesignal_idempotency_key: usedKey
+        });
+        successCount += 1;
+      } catch (dbError) {
+        // Provider accepted but persistence failed — keep idempotency key for safe retry
+        // (same Idempotency-Key must be reused; do not treat all recipients as delivered).
+        const dbReason =
+          dbError instanceof Error ? dbError.message : 'Failed to persist provider acceptance';
+        await deliveriesRepository.markDeliveryFailedRetryable(
+          item.deliveryId,
+          `provider_accepted_db_persist_failed:${dbReason};idempotency=${usedKey};provider_message_id=${providerMessageId}`,
+          nextRetryAtIso()
+        );
+        failCount += 1;
+      }
     }
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'OneSignal push send failed';
@@ -375,6 +437,10 @@ export async function processDriverJobAvailable(
       error && typeof error === 'object' && 'permanent' in error
         ? Boolean((error as { permanent?: boolean }).permanent)
         : false;
+    const keyFromErr =
+      error && typeof error === 'object' && 'idempotencyKey' in error
+        ? String((error as { idempotencyKey?: string }).idempotencyKey ?? idempotencyKey)
+        : idempotencyKey;
 
     for (const item of pending) {
       if (permanent) {
@@ -382,7 +448,7 @@ export async function processDriverJobAvailable(
       } else {
         await deliveriesRepository.markDeliveryFailedRetryable(
           item.deliveryId,
-          reason,
+          `${reason};idempotency=${keyFromErr}`,
           nextRetryAtIso(retryAfterSeconds)
         );
       }

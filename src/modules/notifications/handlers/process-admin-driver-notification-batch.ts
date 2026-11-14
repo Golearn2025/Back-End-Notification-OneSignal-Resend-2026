@@ -7,6 +7,7 @@ import {
   isDeliverySucceeded,
   nextRetryAtIso
 } from '../notification-shared.js';
+import { buildOneSignalIdempotencyKey } from '../onesignal-idempotency.js';
 import type { NotificationEvent } from '../notification.types.js';
 import type { NotificationDeliveriesRepository } from '../notification-deliveries.repository.js';
 import type { NotificationEventsRepository } from '../notification-events.repository.js';
@@ -205,17 +206,32 @@ async function sendAdminGroup(input: {
     return;
   }
 
+  const pushData = {
+    event_type: first.event_type,
+    category: targets[0]?.category ?? 'system',
+    bulk: 'true'
+  };
+  const externalUserIds = targets.map((t) => t.authUserId);
+  const idempotencyKey = buildOneSignalIdempotencyKey({
+    eventId: `admin-bulk:${targets
+      .map((t) => t.event.id)
+      .sort()
+      .join(',')}`,
+    externalUserIds,
+    title,
+    message,
+    data: pushData
+  });
+
   try {
-    const { providerMessageId, responseMetadata } = await oneSignal.sendPushToExternalUserIds({
-      externalUserIds: targets.map((t) => t.authUserId),
-      title,
-      message,
-      data: {
-        event_type: first.event_type,
-        category: targets[0]?.category ?? 'system',
-        bulk: 'true'
-      }
-    });
+    const { providerMessageId, responseMetadata, idempotencyKey: usedKey } =
+      await oneSignal.sendPushToExternalUserIds({
+        externalUserIds,
+        title,
+        message,
+        data: pushData,
+        idempotencyKey
+      });
     const invalid = new Set(responseMetadata.invalidExternalIds ?? []);
 
     for (const target of targets) {
@@ -233,14 +249,30 @@ async function sendAdminGroup(input: {
         continue;
       }
 
-      await deliveriesRepository.markDeliveryProviderAccepted(target.deliveryId, providerMessageId, {
-        provider: 'onesignal',
-        event_type: target.event.event_type,
-        category: target.category,
-        response_metadata: responseMetadata,
-        bulk_recipient_count: targets.length
-      });
-      await eventsRepository.markEventDelivered(target.event.id);
+      try {
+        await deliveriesRepository.markDeliveryProviderAccepted(target.deliveryId, providerMessageId, {
+          provider: 'onesignal',
+          event_type: target.event.event_type,
+          category: target.category,
+          response_metadata: responseMetadata,
+          bulk_recipient_count: targets.length,
+          onesignal_idempotency_key: usedKey
+        });
+        await eventsRepository.markEventDelivered(target.event.id);
+      } catch (dbError) {
+        const dbReason =
+          dbError instanceof Error ? dbError.message : 'Failed to persist provider acceptance';
+        await deliveriesRepository.markDeliveryFailedRetryable(
+          target.deliveryId,
+          `provider_accepted_db_persist_failed:${dbReason};idempotency=${usedKey};provider_message_id=${providerMessageId}`,
+          nextRetryAtIso()
+        );
+        await eventsRepository.markEventFailedRetryable(
+          target.event.id,
+          `provider_accepted_db_persist_failed;idempotency=${usedKey}`,
+          nextRetryAtIso()
+        );
+      }
     }
 
     logger.info(

@@ -24,10 +24,18 @@
 --
 -- Dependency for offerability gate:
 --   Minimal function: migrations/20261114_007_job_leg_is_offerable_minimal.sql
---   Isolated test: migrations/20261114_007_job_leg_is_offerable_isolated_test.sql
+--   Isolated test (recreated fn): migrations/20261114_007_job_leg_is_offerable_isolated_test.sql
+--   Real-file apply test: tests/migrations/job-leg-is-offerable-007.apply.test.ts
 --   Check: select proname from pg_proc where proname = 'job_leg_is_offerable';
 -- Worker fail-closes (dead_letter, no send) if RPC is missing — never treats missing as offerable.
 -- Apply 007 BEFORE/WITH worker deploy that includes the offerability gate.
+--
+-- Residual race (documented, not fully solvable in-process):
+--   Early + late offerability gates run before the OneSignal HTTP call.
+--   If accept/cancel happens AFTER the request has already left to the provider,
+--   the notification cannot be recalled; retries reuse Idempotency-Key so a lost
+--   response does not create a second push for the same logical send.
+--
 -- Reminders: pg_cron job "dispatch-reminder" calls https://vantage-lane.com/api/cron/dispatch-reminder
 --   (outside this repo). No trip_reminder_* processor here.
 SELECT 1;
