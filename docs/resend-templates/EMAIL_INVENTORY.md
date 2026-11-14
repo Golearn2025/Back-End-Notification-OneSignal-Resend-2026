@@ -34,7 +34,7 @@ Scop: când terminăm fiecare template, îl marcăm aici. La final ștergem / de
 
 | # | Alias Resend | Nume | Status | Note |
 |---|--------------|------|--------|------|
-| D1 | `driver_job_accepted_v1` | Job accepted | Live (schelet) | De modernizat + labels; vehicle ID |
+| D1 | `driver_job_accepted_v1` | Job accepted | **DONE v2** | Header; Flight + meet&greet duty; PDF welcome board (blank template + name 2 lines); push OneSignal |
 | D2 | `driver_document_expiring_v1` | Document expiring 30/15/1 | Live (schelet) | De modernizat + CTA Documents |
 | D3 | *(nou)* `driver_job_reminder_v1` | Job reminder 3h | **TODO** | Email backup dacă push off; doar 3h nu 1h |
 
@@ -55,6 +55,8 @@ Scop: când terminăm fiecare template, îl marcăm aici. La final ștergem / de
 |------|-------|--------------|
 | 2026-11-14 | `payment_success_customer_v1` | v2 modern + contact butoane; test `test@` |
 | 2026-11-14 | `customer_account_created_v1` | v2 modern + contact butoane; test `test@` |
+| 2026-11-14 | `driver_job_accepted_v1` | v2 header job-confirmed-driver + vehicle_label + footer contact |
+| 2026-11-14 | `driver_job_accepted_v1` | Flight rows HTML; meet&greet duty; welcome-board PDF attach (blank template) |
 
 ---
 

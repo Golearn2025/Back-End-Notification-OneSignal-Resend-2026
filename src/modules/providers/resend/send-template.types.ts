@@ -1,3 +1,10 @@
+export type ResendEmailAttachment = {
+  filename: string;
+  /** Base64 content */
+  content: string;
+  contentType?: string;
+};
+
 export type SendResendTemplateInput = {
   to: string;
   templateIdOrAlias: string;
@@ -5,6 +12,7 @@ export type SendResendTemplateInput = {
   subject?: string;
   replyTo?: string;
   tags?: Array<{ name: string; value: string }>;
+  attachments?: ResendEmailAttachment[];
 };
 
 export type SendResendTemplateResult = {

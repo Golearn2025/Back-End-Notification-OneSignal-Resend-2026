@@ -20,7 +20,8 @@ Backend-ul trimite emailuri prin API-ul Resend cu **`template.id`** = aliasul te
 | `header-v1-welcome-account-correct.webp` | `customer_account_created_v1` |
 | `header-v1-payment-success.webp` | `payment_success_customer_v1` |
 | `header-v1-jobs-mailbox.webp` | `jobs_mailbox_booking_confirmed_v1` |
-| `header-v1-driver-job-accepted.webp` | `driver_job_accepted_v1` |
+| `header-v1-job-confirmed-driver.webp` | `driver_job_accepted_v1` (șofer) |
+| `header-v1-driver-job-accepted.webp` | legacy / alternativ D1 |
 | `header-v1-magic-link`, `reset-password`, `confirm-signup`, `reauthentication`, `invite-user`, `confirm-email-change` | de obicei **Supabase Auth / alt produs**, nu neapărat acest worker de notificări — tot pe același principiu: URL imagine + variabile în Resend. |
 
 HTML-urile din acest folder sunt **schelete** text-only; poți înlocui în Resend (sau în fișiere + `npm run publish-resend-templates`) cu același header WebP ca în workflow-ul vostru vechi.

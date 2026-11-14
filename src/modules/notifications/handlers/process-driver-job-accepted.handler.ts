@@ -4,6 +4,7 @@ import { OneSignalProvider } from '../../providers/onesignal.provider.js';
 import {
   DEFAULT_SUPPORT_EMAIL,
   DEFAULT_SUPPORT_PHONE,
+  DEFAULT_SUPPORT_WHATSAPP,
   DRIVER_JOB_ACCEPTED_TEMPLATE_ALIAS,
   asNonEmptyString,
   isDeliverySucceeded,
@@ -17,6 +18,7 @@ import {
   type JobUrgency
 } from '../driver-push.formatter.js';
 import { formatUkDateTimeWithLabel } from '../uk-datetime.js';
+import { buildWelcomeBoardPdf } from '../../providers/resend/welcome-board.pdf.js';
 import type { HandlerDeps } from './handler-deps.js';
 
 type DriverJobAcceptedRow = {
@@ -229,7 +231,7 @@ export async function processDriverJobAccepted(
       max_attempts: 3,
       metadata: {
         template_alias: DRIVER_JOB_ACCEPTED_TEMPLATE_ALIAS,
-        template_version: 'v1',
+        template_version: 'v2',
         render_mode: 'resend_template',
         reply_to: DEFAULT_SUPPORT_EMAIL,
         event_family: 'driver_job',
@@ -242,6 +244,70 @@ export async function processDriverJobAccepted(
     } else {
       await deliveriesRepository.markDeliverySending(emailDelivery.id);
       try {
+        const categoryId = asNonEmptyString(v.vehicle_category_id);
+        const modelId = asNonEmptyString(v.vehicle_model_id);
+        const [{ data: categoryRow }, { data: modelRow }, { data: flightRow }, { data: bookingCustomer }] =
+          await Promise.all([
+            categoryId
+              ? db
+                  .from('vehicle_categories')
+                  .select('name')
+                  .eq('id', categoryId)
+                  .maybeSingle()
+              : Promise.resolve({ data: null }),
+            modelId
+              ? db
+                  .from('vehicle_models')
+                  .select('name')
+                  .eq('id', modelId)
+                  .maybeSingle()
+              : Promise.resolve({ data: null }),
+            db
+              .from('booking_legs')
+              .select('flight_number')
+              .eq('id', v.job_id)
+              .eq('organization_id', v.organization_id)
+              .maybeSingle(),
+            db
+              .from('bookings')
+              .select('customer_id')
+              .eq('id', v.booking_id)
+              .eq('organization_id', v.organization_id)
+              .maybeSingle()
+          ]);
+        const categoryLabel =
+          asNonEmptyString((categoryRow as { name?: string | null } | null)?.name) ?? categoryId ?? '';
+        const modelLabel =
+          asNonEmptyString((modelRow as { name?: string | null } | null)?.name) ?? modelId ?? '';
+        const vehicleLabel =
+          [categoryLabel, modelLabel].filter((part) => part.length > 0).join(' · ') || '—';
+        const flightNumber =
+          asNonEmptyString(payload.flight_number) ??
+          asNonEmptyString((flightRow as { flight_number?: string | null } | null)?.flight_number) ??
+          '';
+
+        const bookingCustomerId = asNonEmptyString(
+          (bookingCustomer as { customer_id?: string | null } | null)?.customer_id
+        );
+        let customerFirstName: string | null = asNonEmptyString(payload.customer_first_name);
+        let customerLastName: string | null = asNonEmptyString(payload.customer_last_name);
+        if (bookingCustomerId && (!customerFirstName || !customerLastName)) {
+          const { data: customerRow } = await db
+            .from('customers')
+            .select('first_name, last_name')
+            .eq('id', bookingCustomerId)
+            .maybeSingle();
+          const c = customerRow as { first_name?: string | null; last_name?: string | null } | null;
+          customerFirstName = customerFirstName ?? asNonEmptyString(c?.first_name) ?? null;
+          customerLastName = customerLastName ?? asNonEmptyString(c?.last_name) ?? null;
+        }
+
+        const welcomeBoard = await buildWelcomeBoardPdf({
+          customerFirstName,
+          customerLastName,
+          bookingReference
+        });
+
         const { providerMessageId } = await resend.sendDriverJobAcceptedEmail({
         to: driverEmail,
         driverFirstName: asNonEmptyString(v.driver_first_name) ?? 'there',
@@ -252,8 +318,10 @@ export async function processDriverJobAccepted(
         passengerCount: v.passenger_count ?? '',
         bagCount: v.bag_count ?? '',
         bookingType: v.booking_type != null ? String(v.booking_type) : '',
-        vehicleCategoryId: asNonEmptyString(v.vehicle_category_id) ?? '',
-        vehicleModelId: asNonEmptyString(v.vehicle_model_id) ?? '',
+        flightNumber,
+        vehicleLabel,
+        vehicleCategoryId: categoryId ?? '',
+        vehicleModelId: modelId ?? '',
         legKind: bookingContext.legKind ?? asNonEmptyString(v.leg_kind) ?? '',
         legNumber:
           typeof bookingContext.legNumber === 'number'
@@ -268,14 +336,17 @@ export async function processDriverJobAccepted(
         payoutCurrency,
         driverPayoutDisplay: emailPayoutDisplay,
         supportEmail: DEFAULT_SUPPORT_EMAIL,
-        supportPhone: DEFAULT_SUPPORT_PHONE
+        supportPhone: DEFAULT_SUPPORT_PHONE,
+        supportWhatsapp: DEFAULT_SUPPORT_WHATSAPP,
+        welcomeBoardPdfBase64: Buffer.from(welcomeBoard.bytes).toString('base64'),
+        welcomeBoardFilename: welcomeBoard.filename
       });
 
       await deliveriesRepository.markDeliveryProviderAccepted(emailDelivery.id, providerMessageId, {
         provider: 'resend',
         event_type: 'driver_job_accepted',
         template_alias: DRIVER_JOB_ACCEPTED_TEMPLATE_ALIAS,
-        template_version: 'v1',
+        template_version: 'v2',
         render_mode: 'resend_template',
         reply_to: DEFAULT_SUPPORT_EMAIL,
         event_family: 'driver_job',

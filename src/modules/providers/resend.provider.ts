@@ -80,9 +80,37 @@ export class ResendProvider implements ICustomerAccountCreatedEmailSender {
       throw new Error('Resend not configured: RESEND_API_KEY and RESEND_FROM_EMAIL are required');
     }
 
+    // Trusted HTML fragments built server-side (optional table rows / duty blocks).
+    const passthroughHtmlKeys = new Set(['optional_summary_rows', 'flight_duty_block']);
     const sanitizedVariables = Object.fromEntries(
-      Object.entries(input.variables).map(([key, value]) => [key, escapeTemplateValue(value)])
+      Object.entries(input.variables).map(([key, value]) => [
+        key,
+        passthroughHtmlKeys.has(key)
+          ? typeof value === 'string'
+            ? value
+            : ''
+          : escapeTemplateValue(value)
+      ])
     );
+
+    const payload: Record<string, unknown> = {
+      from,
+      to: [input.to],
+      subject: input.subject,
+      reply_to: input.replyTo ? [input.replyTo] : undefined,
+      tags: input.tags,
+      template: {
+        id: input.templateIdOrAlias,
+        variables: sanitizedVariables
+      }
+    };
+    if (input.attachments && input.attachments.length > 0) {
+      payload.attachments = input.attachments.map((file) => ({
+        filename: file.filename,
+        content: file.content,
+        content_type: file.contentType
+      }));
+    }
 
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -90,17 +118,7 @@ export class ResendProvider implements ICustomerAccountCreatedEmailSender {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`
       },
-      body: JSON.stringify({
-        from,
-        to: [input.to],
-        subject: input.subject,
-        reply_to: input.replyTo ? [input.replyTo] : undefined,
-        tags: input.tags,
-        template: {
-          id: input.templateIdOrAlias,
-          variables: sanitizedVariables
-        }
-      })
+      body: JSON.stringify(payload)
     });
 
     const body = (await response.json()) as {

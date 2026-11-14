@@ -79,11 +79,14 @@ function extractVariableKeys(html: string): string[] {
   return [...found].sort((a, b) => a.localeCompare(b));
 }
 
+/** HTML fragments must fall back to empty, not "—", or empty optional rows show a dash. */
+const EMPTY_FALLBACK_KEYS = new Set(['optional_summary_rows', 'flight_duty_block']);
+
 function buildVariables(keys: readonly string[]): Array<{ key: string; type: 'string'; fallback_value: string }> {
   return keys.map((key) => ({
     key,
     type: 'string' as const,
-    fallback_value: '—'
+    fallback_value: EMPTY_FALLBACK_KEYS.has(key) ? '' : '—'
   }));
 }
 
