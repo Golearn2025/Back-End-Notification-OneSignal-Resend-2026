@@ -5,6 +5,7 @@ import { NotificationDeliveriesRepository } from '../notifications/notification-
 import {
   ADMIN_DRIVER_EVENT_TYPES,
   URGENT_JOB_EVENT_TYPES,
+  getAdminCampaignId,
   isUrgentJobEventType
 } from '../notifications/notification-shared.js';
 import type { NotificationEvent } from '../notifications/notification.types.js';
@@ -36,8 +37,9 @@ export type PollingRunStats = {
 type LaneName = 'urgent' | 'email' | 'admin';
 
 const STUCK_PROCESSING_MS = 10 * 60 * 1000;
-/** Allow a blocked campaign bulk + a separate individual admin send concurrently. */
+/** One blocked campaign + one individual (or second campaign) concurrently. */
 const MAX_ADMIN_IN_FLIGHT = 2;
+const MAX_CAMPAIGN_AUDIENCE = 5000;
 
 export class PollingWorker {
   private readonly laneBusy: Record<'urgent' | 'email', boolean> = {
@@ -45,6 +47,7 @@ export class PollingWorker {
     email: false
   };
   private adminInFlight = 0;
+  private readonly adminCampaignsInFlight = new Set<string>();
   private readonly lanePromises: Partial<Record<LaneName, Promise<void>>> = {};
   private readonly adminPromises = new Set<Promise<void>>();
 
@@ -57,8 +60,9 @@ export class PollingWorker {
   ) {}
 
   /**
-   * Processes free lanes. Admin may continue in the background after this returns
-   * so a blocked campaign cannot prevent a later urgent/Direct wake-up tick.
+   * Starts free lanes and returns without waiting on them.
+   * Urgent / email / admin are isolated so a blocked email or campaign cannot
+   * prevent a later Direct (or individual admin) wake-up tick.
    */
   async runOnce(batchSize: number): Promise<PollingRunStats> {
     const reclaimedStuck = await this.eventsRepository.reclaimStuckProcessing(STUCK_PROCESSING_MS);
@@ -85,7 +89,6 @@ export class PollingWorker {
     const urgentTypes = [...URGENT_JOB_EVENT_TYPES];
     const adminTypes = [...ADMIN_DRIVER_EVENT_TYPES];
 
-    // Fetch budget+1 per category to detect remaining backlog accurately.
     const [urgentProbe, adminProbe, otherProbe] = await Promise.all([
       this.eventsRepository.getPendingEventsFiltered({
         limit: urgentBudget + 1,
@@ -106,75 +109,62 @@ export class PollingWorker {
     const emailBacklog = otherProbe.length > otherBudget;
 
     const urgentEvents = urgentProbe.slice(0, urgentBudget);
-    const adminEvents = adminProbe.slice(0, otherBudget);
     const emailEvents = otherProbe.slice(0, otherBudget);
 
-    stats.fetched = urgentEvents.length + adminEvents.length + emailEvents.length;
     stats.backlog = {
       urgent: urgentBacklog,
       admin: adminBacklog,
       email: emailBacklog
     };
 
-    const highPriorityAdmin = adminProbe.filter(
-      (e) => e.priority === 'high' || e.priority === 'critical'
-    );
-
-    const foreground: Promise<void>[] = [];
-
+    // Fire-and-forget exclusive lanes — do NOT await email/urgent here.
     if (!this.laneBusy.urgent && urgentEvents.length > 0) {
-      foreground.push(
-        this.startExclusiveLane('urgent', async () => {
-          await this.claimAndProcessPool(urgentEvents, 4, stats);
-        })
-      );
-    }
-
-    if (!this.laneBusy.email && emailEvents.length > 0) {
-      foreground.push(
-        this.startExclusiveLane('email', async () => {
-          await this.claimAndProcessPool(emailEvents, 2, stats);
-        })
-      );
-    }
-
-    // Admin lanes:
-    // - primary (adminInFlight===0): drain up to otherBudget (campaign bulk OK)
-    // - interrupt slots: only high/critical so a blocked campaign cannot fill every
-    //   concurrent slot and starve individual admin messages injected later
-    const adminClaim =
-      this.adminInFlight === 0 ? adminEvents : highPriorityAdmin.slice(0, 1);
-
-    if (this.adminInFlight < MAX_ADMIN_IN_FLIGHT && adminClaim.length > 0) {
-      void this.startAdminLane(async () => {
-        const claimed = await this.claimAll(adminClaim, stats);
-        if (claimed.length === 0) {
-          return;
-        }
-        try {
-          await this.adminBatchFn({
-            events: claimed,
-            eventsRepository: this.eventsRepository,
-            deliveriesRepository: this.deliveriesRepository,
-            ...(this.oneSignal ? { oneSignal: this.oneSignal } : {})
-          });
-          stats.processed += claimed.length;
-        } catch (error) {
-          const reason = error instanceof Error ? error.message : 'Unknown admin batch error';
-          for (const event of claimed) {
-            await this.eventsRepository.markEventFailedRetryable(
-              event.id,
-              reason,
-              new Date(Date.now() + 5 * 60 * 1000).toISOString()
-            );
-            stats.failed += 1;
-          }
-          logger.error({ reason, count: claimed.length }, 'Admin driver push batch failed');
-        }
+      stats.fetched += urgentEvents.length;
+      void this.startExclusiveLane('urgent', async () => {
+        await this.claimAndProcessPool(urgentEvents, 4, stats);
       });
     }
 
-    await Promise.all(foreground);
+    if (!this.laneBusy.email && emailEvents.length > 0) {
+      stats.fetched += emailEvents.length;
+      void this.startExclusiveLane('email', async () => {
+        await this.claimAndProcessPool(emailEvents, 2, stats);
+      });
+    }
+
+    if (this.adminInFlight < MAX_ADMIN_IN_FLIGHT) {
+      const adminWork = await this.selectAdminWork(adminProbe, otherBudget, adminTypes);
+      if (adminWork.events.length > 0) {
+        stats.fetched += adminWork.events.length;
+        const campaignId = adminWork.campaignId;
+        void this.startAdminLane(campaignId, async () => {
+          const claimed = await this.claimAll(adminWork.events, stats);
+          if (claimed.length === 0) {
+            return;
+          }
+          try {
+            await this.adminBatchFn({
+              events: claimed,
+              eventsRepository: this.eventsRepository,
+              deliveriesRepository: this.deliveriesRepository,
+              ...(this.oneSignal ? { oneSignal: this.oneSignal } : {})
+            });
+            stats.processed += claimed.length;
+          } catch (error) {
+            const reason = error instanceof Error ? error.message : 'Unknown admin batch error';
+            for (const event of claimed) {
+              await this.eventsRepository.markEventFailedRetryable(
+                event.id,
+                reason,
+                new Date(Date.now() + 5 * 60 * 1000).toISOString()
+              );
+              stats.failed += 1;
+            }
+            logger.error({ reason, count: claimed.length }, 'Admin driver push batch failed');
+          }
+        });
+      }
+    }
 
     stats.lanes = {
       urgentBusy: this.laneBusy.urgent,
@@ -182,13 +172,10 @@ export class PollingWorker {
       adminBusy: this.adminInFlight > 0
     };
 
-    // Claimable work only — do not busy-spin while a background admin batch is blocked.
-    // WorkerManager brief-yields when lanes.adminBusy / backlog so wake-ups still land quickly.
-    const canStartPrimaryAdmin = this.adminInFlight === 0 && adminBacklog;
+    const canStartPrimaryAdmin = this.adminInFlight === 0 && (adminBacklog || adminProbe.length > 0);
     const canStartAdminInterrupt =
-      this.adminInFlight > 0 &&
-      this.adminInFlight < MAX_ADMIN_IN_FLIGHT &&
-      highPriorityAdmin.some((e) => e.status === 'pending' || e.status === 'ready' || !e.status);
+      this.adminInFlight > 0 && this.adminInFlight < MAX_ADMIN_IN_FLIGHT;
+
     stats.morePendingLikely =
       (urgentBacklog && !this.laneBusy.urgent) ||
       (emailBacklog && !this.laneBusy.email) ||
@@ -199,7 +186,6 @@ export class PollingWorker {
     return stats;
   }
 
-  /** Test/helper: wait for background admin work to settle. */
   async waitForLane(lane: LaneName): Promise<void> {
     if (lane === 'admin') {
       await Promise.all([...this.adminPromises]);
@@ -218,6 +204,49 @@ export class PollingWorker {
     return this.laneBusy[lane];
   }
 
+  /**
+   * Primary slot: expand explicit campaign to full audience, else take individuals.
+   * Interrupt slot (admin already busy): only events that are NOT part of an
+   * in-flight campaign — including priority=normal individuals from live enqueue.
+   */
+  private async selectAdminWork(
+    adminProbe: NotificationEvent[],
+    otherBudget: number,
+    adminTypes: string[]
+  ): Promise<{ events: NotificationEvent[]; campaignId: string | null }> {
+    if (this.adminInFlight === 0) {
+      const seed = adminProbe[0];
+      if (!seed) {
+        return { events: [], campaignId: null };
+      }
+      const campaignId = getAdminCampaignId(seed);
+      if (campaignId) {
+        const full = await this.eventsRepository.getPendingEventsByCampaignId(
+          campaignId,
+          MAX_CAMPAIGN_AUDIENCE
+        );
+        return {
+          events: full.length > 0 ? full : adminProbe.filter((e) => getAdminCampaignId(e) === campaignId),
+          campaignId
+        };
+      }
+      // Individuals / legacy rows without campaign_id — small slice, each sent separately.
+      return {
+        events: adminProbe.filter((e) => getAdminCampaignId(e) == null).slice(0, otherBudget),
+        campaignId: null
+      };
+    }
+
+    // Interrupt: widen search so individuals are not hidden behind leftover campaign rows
+    // in the narrow budget probe. Live enqueue uses priority=normal, no campaign_id.
+    const wide = await this.eventsRepository.getPendingEventsFiltered({
+      limit: Math.max(otherBudget * 10, 100),
+      includeEventTypes: adminTypes
+    });
+    const interrupt = wide.filter((e) => getAdminCampaignId(e) == null).slice(0, 1);
+    return { events: interrupt, campaignId: null };
+  }
+
   private startExclusiveLane(lane: 'urgent' | 'email', work: () => Promise<void>): Promise<void> {
     this.laneBusy[lane] = true;
     const promise = (async () => {
@@ -232,14 +261,20 @@ export class PollingWorker {
     return promise;
   }
 
-  private startAdminLane(work: () => Promise<void>): Promise<void> {
+  private startAdminLane(campaignId: string | null, work: () => Promise<void>): Promise<void> {
     this.adminInFlight += 1;
+    if (campaignId) {
+      this.adminCampaignsInFlight.add(campaignId);
+    }
     let promise!: Promise<void>;
     promise = (async () => {
       try {
         await work();
       } finally {
         this.adminInFlight -= 1;
+        if (campaignId) {
+          this.adminCampaignsInFlight.delete(campaignId);
+        }
         this.adminPromises.delete(promise);
       }
     })();
@@ -276,7 +311,7 @@ export class PollingWorker {
     }
     const limit = Math.max(1, concurrency);
     for (let offset = 0; offset < claimed.length; offset += limit) {
-      const chunk = claimed.slice(offset, offset + limit);
+      const chunk = claimed.slice(offset, limit + offset);
       await Promise.all(
         chunk.map(async (event) => {
           try {

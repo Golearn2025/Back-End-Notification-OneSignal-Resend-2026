@@ -11,7 +11,12 @@ import {
 import { loadBookingNotificationContext } from '../booking-notification-context.service.js';
 import { DriverEligibilityService } from '../driver-eligibility.service.js';
 import { asNonEmptyString, isDeliverySucceeded, nextRetryAtIso } from '../notification-shared.js';
-import { buildOneSignalIdempotencyKey } from '../onesignal-idempotency.js';
+import {
+  buildPersistedOneSignalPayloadPatch,
+  readPersistedOneSignalRequest,
+  resolveOneSignalIdempotencyKey,
+  type PersistedOneSignalRequest
+} from '../onesignal-idempotency.js';
 import type { HandlerDeps } from './handler-deps.js';
 
 async function assertJobStillOfferable(
@@ -373,24 +378,30 @@ export async function processDriverJobAvailable(
     }
   }
 
-  const externalUserIds = pending.map((item) => item.authUserId);
-  const idempotencyKey = buildOneSignalIdempotencyKey({
-    eventId: event.id,
-    externalUserIds,
+  const liveAudience = [...new Set(pending.map((item) => item.authUserId))].sort();
+  const persisted = readPersistedOneSignalRequest(event.payload);
+  const request: PersistedOneSignalRequest = persisted ?? {
+    idempotency_key: resolveOneSignalIdempotencyKey(
+      asNonEmptyString(event.payload?.onesignal_idempotency_key)
+    ),
+    external_user_ids: liveAudience,
     title,
     message,
     data: pushData
-  });
+  };
+  const payloadPatch = buildPersistedOneSignalPayloadPatch(request);
+  await eventsRepository.mergeEventPayload(event.id, payloadPatch);
+  event.payload = { ...(event.payload ?? {}), ...payloadPatch };
 
-  // Same job + wave + shared title/body → one OneSignal request with explicit recipient list.
+  // Same job + wave → one OneSignal request; retries reuse original UUID + audience.
   try {
     const { providerMessageId, responseMetadata, idempotencyKey: usedKey } =
       await oneSignal.sendPushToExternalUserIds({
-        externalUserIds,
-        title,
-        message,
-        data: pushData,
-        idempotencyKey
+        externalUserIds: request.external_user_ids,
+        title: request.title,
+        message: request.message,
+        ...(request.data ? { data: request.data } : { data: pushData }),
+        idempotencyKey: request.idempotency_key
       });
     const invalid = new Set(responseMetadata.invalidExternalIds ?? []);
 
@@ -399,7 +410,11 @@ export async function processDriverJobAvailable(
         await deliveriesRepository.markDeliveryFailedRetryable(
           item.deliveryId,
           `OneSignal invalid_aliases.external_id=${item.authUserId}`,
-          nextRetryAtIso()
+          nextRetryAtIso(),
+          {
+            onesignal_idempotency_key: usedKey,
+            onesignal_original_audience: request.external_user_ids
+          }
         );
         failCount += 1;
         continue;
@@ -410,20 +425,27 @@ export async function processDriverJobAvailable(
           event_type: 'driver_job_available',
           response_metadata: responseMetadata,
           booking_reference: bookingReference,
-          bulk_recipient_count: pending.length,
-          onesignal_idempotency_key: usedKey
+          bulk_recipient_count: request.external_user_ids.length,
+          onesignal_idempotency_key: usedKey,
+          onesignal_original_audience: request.external_user_ids
         });
         successCount += 1;
       } catch (dbError) {
-        // Provider accepted but persistence failed — keep idempotency key for safe retry
-        // (same Idempotency-Key must be reused; do not treat all recipients as delivered).
         const dbReason =
           dbError instanceof Error ? dbError.message : 'Failed to persist provider acceptance';
         await deliveriesRepository.markDeliveryFailedRetryable(
           item.deliveryId,
-          `provider_accepted_db_persist_failed:${dbReason};idempotency=${usedKey};provider_message_id=${providerMessageId}`,
-          nextRetryAtIso()
+          `provider_accepted_db_persist_failed:${dbReason}`,
+          nextRetryAtIso(),
+          {
+            onesignal_idempotency_key: usedKey,
+            onesignal_original_audience: request.external_user_ids,
+            onesignal_original_title: request.title,
+            onesignal_original_message: request.message,
+            provider_message_id_unpersisted: providerMessageId
+          }
         );
+        await eventsRepository.mergeEventPayload(event.id, payloadPatch);
         failCount += 1;
       }
     }
@@ -439,8 +461,8 @@ export async function processDriverJobAvailable(
         : false;
     const keyFromErr =
       error && typeof error === 'object' && 'idempotencyKey' in error
-        ? String((error as { idempotencyKey?: string }).idempotencyKey ?? idempotencyKey)
-        : idempotencyKey;
+        ? String((error as { idempotencyKey?: string }).idempotencyKey ?? request.idempotency_key)
+        : request.idempotency_key;
 
     for (const item of pending) {
       if (permanent) {
@@ -448,9 +470,16 @@ export async function processDriverJobAvailable(
       } else {
         await deliveriesRepository.markDeliveryFailedRetryable(
           item.deliveryId,
-          `${reason};idempotency=${keyFromErr}`,
-          nextRetryAtIso(retryAfterSeconds)
+          reason,
+          nextRetryAtIso(retryAfterSeconds),
+          {
+            onesignal_idempotency_key: keyFromErr,
+            onesignal_original_audience: request.external_user_ids,
+            onesignal_original_title: request.title,
+            onesignal_original_message: request.message
+          }
         );
+        await eventsRepository.mergeEventPayload(event.id, payloadPatch);
       }
       failCount += 1;
     }

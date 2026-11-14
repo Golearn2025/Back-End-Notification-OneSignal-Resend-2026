@@ -11,9 +11,9 @@ describe('provider accepted but DB persist fails', () => {
     const markDeliveryFailedRetryable = vi.fn();
     const markEventPartiallyDelivered = vi.fn();
 
-    const sendPushToExternalUserIds = vi.fn(async () => ({
+    const sendPushToExternalUserIds = vi.fn(async ({ idempotencyKey }: { idempotencyKey?: string }) => ({
       providerMessageId: 'os-accepted',
-      idempotencyKey: 'vl-push:evt-persist:fixed',
+      idempotencyKey: idempotencyKey ?? '00000000-0000-4000-8000-000000000001',
       responseMetadata: { invalidExternalIds: [] }
     }));
 
@@ -41,7 +41,8 @@ describe('provider accepted but DB persist fails', () => {
           markEventFailedRetryable: vi.fn(),
           markEventPartiallyDelivered,
           markEventCancelled: vi.fn(),
-          markEventDeadLetter: vi.fn()
+          markEventDeadLetter: vi.fn(),
+          mergeEventPayload: vi.fn()
         } as any,
         deliveriesRepository: {
           createDelivery: vi.fn(async (input: any) => ({
@@ -74,14 +75,18 @@ describe('provider accepted but DB persist fails', () => {
     );
 
     expect(sendPushToExternalUserIds).toHaveBeenCalledWith(
-      expect.objectContaining({ idempotencyKey: expect.stringContaining('vl-push:evt-persist:') })
+      expect.objectContaining({
+        idempotencyKey: expect.stringMatching(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+        )
+      })
     );
     expect(markDeliveryFailedRetryable).toHaveBeenCalledWith(
       'del-d2',
       expect.stringContaining('provider_accepted_db_persist_failed'),
-      expect.any(String)
+      expect.any(String),
+      expect.objectContaining({ onesignal_idempotency_key: expect.any(String) })
     );
-    expect(markDeliveryFailedRetryable.mock.calls[0]?.[1]).toContain('idempotency=');
     expect(markEventPartiallyDelivered).toHaveBeenCalledWith('evt-persist');
   });
 
@@ -94,9 +99,9 @@ describe('provider accepted but DB persist fails', () => {
     const markEventFailedRetryable = vi.fn();
     const markEventDelivered = vi.fn();
 
-    const sendPushToExternalUserIds = vi.fn(async () => ({
+    const sendPushToExternalUserIds = vi.fn(async ({ idempotencyKey }: { idempotencyKey?: string }) => ({
       providerMessageId: 'os-admin',
-      idempotencyKey: 'vl-push:admin-bulk:e1,e2:abc',
+      idempotencyKey: idempotencyKey ?? '00000000-0000-4000-8000-000000000099',
       responseMetadata: { invalidExternalIds: [] }
     }));
 
@@ -113,6 +118,8 @@ describe('provider accepted but DB persist fails', () => {
       status: 'processing',
       customer_id: null,
       payload: {
+        campaign_id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+        campaign_scope: 'bulk',
         push_title: 'Campaign',
         push_body: 'Hello'
       }
@@ -126,7 +133,8 @@ describe('provider accepted but DB persist fails', () => {
       eventsRepository: {
         markEventDelivered,
         markEventFailedRetryable,
-        markEventDeadLetter: vi.fn()
+        markEventDeadLetter: vi.fn(),
+        mergeEventPayload: vi.fn()
       } as any,
       deliveriesRepository: {
         createDelivery: vi.fn(async (input: any) => ({
@@ -157,11 +165,19 @@ describe('provider accepted but DB persist fails', () => {
     );
     expect(markDeliveryFailedRetryable).toHaveBeenCalledWith(
       'del-d2',
-      expect.stringMatching(/idempotency=.*provider_message_id=os-admin/),
-      expect.any(String)
+      expect.stringContaining('provider_accepted_db_persist_failed'),
+      expect.any(String),
+      expect.objectContaining({
+        onesignal_idempotency_key: expect.any(String),
+        onesignal_original_audience: expect.any(Array)
+      })
     );
     expect(sendPushToExternalUserIds).toHaveBeenCalledWith(
-      expect.objectContaining({ idempotencyKey: expect.stringContaining('vl-push:') })
+      expect.objectContaining({
+        idempotencyKey: expect.stringMatching(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+        )
+      })
     );
   });
 });

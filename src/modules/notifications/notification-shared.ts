@@ -48,6 +48,23 @@ export function adminPushFingerprint(input: {
   return [input.organizationId, input.eventType, input.title, input.message].join('\u0000');
 }
 
+/** Explicit campaign id from enqueue payload (never inferred from title/body alone). */
+export function getAdminCampaignId(event: Pick<NotificationEvent, 'payload'>): string | null {
+  return asNonEmptyString(event.payload?.campaign_id);
+}
+
+export function isAdminCampaignEvent(event: Pick<NotificationEvent, 'payload'>): boolean {
+  return getAdminCampaignId(event) != null;
+}
+
+export function isAdminIndividualEvent(event: Pick<NotificationEvent, 'payload'>): boolean {
+  if (getAdminCampaignId(event) != null) {
+    return false;
+  }
+  const scope = asNonEmptyString(event.payload?.campaign_scope);
+  return scope === 'individual' || scope == null;
+}
+
 export function isDeliverySucceeded(status: NotificationDeliveryStatus): boolean {
   return (
     status === 'provider_accepted' ||

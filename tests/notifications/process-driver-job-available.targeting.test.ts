@@ -58,6 +58,8 @@ describe('processDriverJobAvailable targeting', () => {
           markEventFailedRetryable,
           markEventPartiallyDelivered,
           markEventCancelled
+        ,
+          mergeEventPayload: vi.fn()
         } as any,
         deliveriesRepository: {
           createDelivery,
@@ -146,6 +148,8 @@ describe('processDriverJobAvailable targeting', () => {
           markEventFailedRetryable: vi.fn(),
           markEventPartiallyDelivered: vi.fn(),
           markEventCancelled: vi.fn()
+        ,
+          mergeEventPayload: vi.fn()
         } as any,
         deliveriesRepository: {
           createDelivery,
@@ -204,7 +208,8 @@ describe('processDriverJobAvailable targeting', () => {
           markEventFailedRetryable: vi.fn(),
           markEventPartiallyDelivered: vi.fn(),
           markEventCancelled,
-          markEventDeadLetter: vi.fn()
+          markEventDeadLetter: vi.fn(),
+          mergeEventPayload: vi.fn()
         } as any,
         deliveriesRepository: {
           createDelivery: vi.fn(),

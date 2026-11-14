@@ -38,6 +38,8 @@ describe('processAdminDriverNotificationBatch', () => {
       status: 'processing',
       customer_id: null,
       payload: {
+        campaign_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        campaign_scope: 'bulk',
         push_title: 'Test Notifications',
         push_body: 'Confirma in grup daca ai primit Notificare'
       }
@@ -51,7 +53,8 @@ describe('processAdminDriverNotificationBatch', () => {
       eventsRepository: {
         markEventDelivered,
         markEventFailedRetryable,
-        markEventDeadLetter: vi.fn()
+        markEventDeadLetter: vi.fn(),
+        mergeEventPayload: vi.fn()
       } as any,
       deliveriesRepository: {
         createDelivery,

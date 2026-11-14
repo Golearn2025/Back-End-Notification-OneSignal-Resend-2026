@@ -123,6 +123,58 @@ export class NotificationEventsRepository {
     return (data ?? []).length;
   }
 
+  /**
+   * All due admin push events for an explicit campaign_id (full audience assembly).
+   * Caps at `limit` as a safety valve (default 5000).
+   */
+  async getPendingEventsByCampaignId(campaignId: string, limit = 5000): Promise<NotificationEvent[]> {
+    const nowIso = new Date().toISOString();
+    const { data, error } = await this.db
+      .from('notification_events')
+      .select('*')
+      .or(
+        `status.in.(pending,ready),and(status.eq.failed_retryable,or(next_retry_at.is.null,next_retry_at.lte.${nowIso}))`
+      )
+      .filter('payload->>campaign_id', 'eq', campaignId)
+      .order('occurred_at', { ascending: true })
+      .limit(Math.max(1, limit));
+
+    if (error) {
+      throw new Error(`Failed to fetch campaign notification events: ${error.message}`);
+    }
+
+    return (data ?? []) as NotificationEvent[];
+  }
+
+  async mergeEventPayload(eventId: string, patch: Record<string, unknown>): Promise<void> {
+    const { data: current, error: loadError } = await this.db
+      .from('notification_events')
+      .select('payload')
+      .eq('id', eventId)
+      .single();
+
+    if (loadError || !current) {
+      throw new Error(`Failed to load event payload: ${loadError?.message ?? 'unknown error'}`);
+    }
+
+    const nextPayload = {
+      ...((current.payload as Record<string, unknown> | null) ?? {}),
+      ...patch
+    };
+
+    const { error } = await this.db
+      .from('notification_events')
+      .update({
+        payload: nextPayload,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', eventId);
+
+    if (error) {
+      throw new Error(`Failed to merge event payload: ${error.message}`);
+    }
+  }
+
   async claimEventForProcessing(eventId: string): Promise<NotificationEvent | null> {
     const { data, error } = await this.db
       .from('notification_events')

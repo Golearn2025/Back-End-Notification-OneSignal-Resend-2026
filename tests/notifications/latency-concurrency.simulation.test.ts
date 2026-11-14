@@ -46,7 +46,7 @@ describe('latency concurrency simulation (fake providers)', () => {
       return { providerMessageId: 'email-1' };
     });
 
-    // Build 100 identical admin campaign events (shared title/body → one bulk call).
+    // Build 100 admin campaign events with explicit campaign_id → one bulk call.
     const campaignEvents = Array.from({ length: 100 }, (_, i) => ({
       id: `camp-${i}`,
       organization_id: 'org-1',
@@ -57,6 +57,8 @@ describe('latency concurrency simulation (fake providers)', () => {
       customer_id: null,
       driver_id: `d-${i}`,
       payload: {
+        campaign_id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        campaign_scope: 'bulk',
         push_title: 'Campaign',
         push_body: 'Bulk test'
       }
@@ -80,7 +82,8 @@ describe('latency concurrency simulation (fake providers)', () => {
       eventsRepository: {
         markEventDelivered: vi.fn(),
         markEventFailedRetryable: vi.fn(),
-        markEventDeadLetter: vi.fn()
+        markEventDeadLetter: vi.fn(),
+        mergeEventPayload: vi.fn()
       } as any,
       deliveriesRepository: {
         createDelivery: vi.fn(async (input: any) => ({
@@ -125,6 +128,8 @@ describe('latency concurrency simulation (fake providers)', () => {
           markEventPartiallyDelivered: vi.fn(),
           markEventCancelled: vi.fn(),
           markEventDeadLetter: vi.fn()
+        ,
+          mergeEventPayload: vi.fn()
         } as any,
         deliveriesRepository: {
           createDelivery: vi.fn(async (input: any) => ({
@@ -160,18 +165,20 @@ describe('latency concurrency simulation (fake providers)', () => {
           organization_id: 'org-1',
           event_type: 'admin_driver_system',
           source_module: 'admin_communications',
-          priority: 'high',
+          priority: 'normal',
           status: 'processing',
           customer_id: null,
           driver_id: 'driver-ind',
-          payload: { push_title: 'Hello', push_body: 'Just you' }
+          payload: { campaign_scope: 'individual', push_title: 'Hello', push_body: 'Just you' }
         } as any
       ],
       eventsRepository: {
         markEventDelivered: vi.fn(),
         markEventFailedRetryable: vi.fn(),
         markEventDeadLetter: vi.fn()
-      } as any,
+      ,
+          mergeEventPayload: vi.fn()
+        } as any,
       deliveriesRepository: {
         createDelivery: vi.fn(async (input: any) => ({
           id: 'del-ind',
@@ -245,6 +252,8 @@ describe('latency concurrency simulation (fake providers)', () => {
           markEventPartiallyDelivered,
           markEventCancelled: vi.fn(),
           markEventDeadLetter: vi.fn()
+        ,
+          mergeEventPayload: vi.fn()
         } as any,
         deliveriesRepository: {
           createDelivery: vi.fn(async (input: any) => ({
@@ -313,7 +322,9 @@ describe('latency concurrency simulation (fake providers)', () => {
         markEventPartiallyDelivered: vi.fn(),
         markEventCancelled: vi.fn(),
         markEventDeadLetter: vi.fn()
-      } as any,
+      ,
+          mergeEventPayload: vi.fn()
+        } as any,
       deliveriesRepository: {
         createDelivery,
         markDeliverySending: vi.fn(),
@@ -392,6 +403,8 @@ describe('latency concurrency simulation (fake providers)', () => {
           markEventPartiallyDelivered: vi.fn(),
           markEventCancelled: vi.fn(),
           markEventDeadLetter
+        ,
+          mergeEventPayload: vi.fn()
         } as any,
         deliveriesRepository: {
           createDelivery: vi.fn(),

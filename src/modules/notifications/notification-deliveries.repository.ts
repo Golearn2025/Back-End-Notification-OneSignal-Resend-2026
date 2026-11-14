@@ -119,10 +119,15 @@ export class NotificationDeliveriesRepository {
     });
   }
 
-  async markDeliveryFailedRetryable(deliveryId: string, reason: string, nextRetryAt: string): Promise<void> {
+  async markDeliveryFailedRetryable(
+    deliveryId: string,
+    reason: string,
+    nextRetryAt: string,
+    metadataPatch: Record<string, unknown> = {}
+  ): Promise<void> {
     const { data: current, error: loadError } = await this.db
       .from('notification_deliveries')
-      .select('attempt_no')
+      .select('attempt_no, metadata')
       .eq('id', deliveryId)
       .single();
 
@@ -130,12 +135,18 @@ export class NotificationDeliveriesRepository {
       throw new Error(`Failed to load current delivery attempt: ${loadError?.message ?? 'unknown error'}`);
     }
 
+    const mergedMetadata = {
+      ...((current.metadata as Record<string, unknown> | null) ?? {}),
+      ...metadataPatch
+    };
+
     await this.updateDelivery(deliveryId, {
       status: 'failed_retryable',
       attempt_no: (current.attempt_no ?? 0) + 1,
       next_retry_at: nextRetryAt,
       failed_at: new Date().toISOString(),
-      provider_error_message: reason
+      provider_error_message: reason,
+      metadata: mergedMetadata
     });
   }
 

@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildOneSignalIdempotencyKey } from '../../src/modules/notifications/onesignal-idempotency.js';
+import {
+  createOneSignalIdempotencyKey,
+  isOneSignalIdempotencyKey
+} from '../../src/modules/notifications/onesignal-idempotency.js';
 import { OneSignalProvider } from '../../src/modules/providers/onesignal.provider.js';
 import { resetEnvCacheForTests } from '../../src/config/env.js';
 
@@ -27,7 +30,7 @@ describe('OneSignal idempotency + timeout', () => {
     resetEnvCacheForTests();
   }
 
-  it('sends Idempotency-Key header and stable sorted audience', async () => {
+  it('sends UUID Idempotency-Key header and stable sorted audience', async () => {
     stubEnv();
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       return new Response(JSON.stringify({ id: 'os-1', recipients: 2 }), {
@@ -38,12 +41,8 @@ describe('OneSignal idempotency + timeout', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const provider = new OneSignalProvider();
-    const key = buildOneSignalIdempotencyKey({
-      eventId: 'evt-1',
-      externalUserIds: ['b', 'a'],
-      title: 'T',
-      message: 'M'
-    });
+    const key = createOneSignalIdempotencyKey();
+    expect(isOneSignalIdempotencyKey(key)).toBe(true);
 
     await provider.sendPushToExternalUserIds({
       externalUserIds: ['b', 'a'],
@@ -59,9 +58,10 @@ describe('OneSignal idempotency + timeout', () => {
     const body = JSON.parse(String(init.body));
     expect(body.include_aliases.external_id).toEqual(['a', 'b']);
     expect(body.idempotency_key).toBe(key);
+    expect(isOneSignalIdempotencyKey(body.idempotency_key)).toBe(true);
   });
 
-  it('reuses the same idempotency key on retry after lost response', async () => {
+  it('reuses the same UUID on retry after lost response', async () => {
     stubEnv();
     const keys: string[] = [];
     const fetchMock = vi
@@ -69,7 +69,6 @@ describe('OneSignal idempotency + timeout', () => {
       .mockImplementationOnce(async (_url: string, init?: RequestInit) => {
         const headers = init?.headers as Record<string, string>;
         keys.push(String(headers['Idempotency-Key'] ?? ''));
-        // Simulate: provider accepted but client never persisted (network drop after body).
         throw Object.assign(new Error('network drop after accept'), { name: 'TypeError' });
       })
       .mockImplementationOnce(async (_url: string, init?: RequestInit) => {
@@ -83,7 +82,7 @@ describe('OneSignal idempotency + timeout', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const provider = new OneSignalProvider();
-    const key = 'vl-push:evt-retry:abc';
+    const key = createOneSignalIdempotencyKey();
 
     await expect(
       provider.sendPushToExternalUserIds({
@@ -124,18 +123,19 @@ describe('OneSignal idempotency + timeout', () => {
     );
 
     const provider = new OneSignalProvider();
+    const key = createOneSignalIdempotencyKey();
     await expect(
       provider.sendPushToExternalUserIds({
         externalUserIds: ['u1'],
         title: 'T',
         message: 'M',
-        idempotencyKey: 'k-timeout',
+        idempotencyKey: key,
         timeoutMs: 20
       })
     ).rejects.toMatchObject({
       message: expect.stringContaining('timeout'),
       permanent: false,
-      idempotencyKey: 'k-timeout'
+      idempotencyKey: key
     });
   });
 });

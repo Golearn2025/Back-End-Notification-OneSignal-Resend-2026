@@ -1,6 +1,9 @@
 import { getEnv } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
-import { buildOneSignalIdempotencyKey } from '../notifications/onesignal-idempotency.js';
+import {
+  isOneSignalIdempotencyKey,
+  resolveOneSignalIdempotencyKey
+} from '../notifications/onesignal-idempotency.js';
 
 export type SendOneSignalExternalUserPushInput = {
   externalUserId: string;
@@ -96,15 +99,11 @@ export class OneSignalProvider {
       throw new Error('OneSignal send failed: empty externalUserIds');
     }
 
-    const idempotencyKey =
-      input.idempotencyKey?.trim() ||
-      buildOneSignalIdempotencyKey({
-        eventId: 'anonymous',
-        externalUserIds,
-        title: input.title,
-        message: input.message,
-        ...(input.data ? { data: input.data } : {})
-      });
+    const idempotencyKey = resolveOneSignalIdempotencyKey(input.idempotencyKey);
+    if (!isOneSignalIdempotencyKey(idempotencyKey)) {
+      // resolveOneSignalIdempotencyKey always returns a UUID; guard for callers bypassing it.
+      throw new Error('OneSignal send failed: idempotency_key must be a UUID');
+    }
 
     const body: Record<string, unknown> = {
       app_id: appId,
@@ -114,7 +113,7 @@ export class OneSignalProvider {
       target_channel: 'push',
       headings: { en: input.title },
       contents: { en: input.message },
-      // Also embed for provider-side correlation / debugging.
+      // OneSignal requires UUID for idempotency_key.
       idempotency_key: idempotencyKey
     };
 

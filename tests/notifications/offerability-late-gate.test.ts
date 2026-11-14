@@ -45,7 +45,8 @@ describe('late offerability gate before OneSignal', () => {
           markEventFailedRetryable: vi.fn(),
           markEventPartiallyDelivered: vi.fn(),
           markEventCancelled,
-          markEventDeadLetter: vi.fn()
+          markEventDeadLetter: vi.fn(),
+          mergeEventPayload: vi.fn()
         } as any,
         deliveriesRepository: {
           createDelivery: vi.fn(async (input: any) => ({

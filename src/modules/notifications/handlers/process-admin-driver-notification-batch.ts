@@ -2,15 +2,21 @@ import { logger } from '../../../config/logger.js';
 import { getSupabaseAdmin } from '../../../config/supabase.js';
 import { OneSignalProvider } from '../../providers/onesignal.provider.js';
 import {
-  adminPushFingerprint,
   asNonEmptyString,
+  getAdminCampaignId,
   isDeliverySucceeded,
   nextRetryAtIso
 } from '../notification-shared.js';
-import { buildOneSignalIdempotencyKey } from '../onesignal-idempotency.js';
+import {
+  buildPersistedOneSignalPayloadPatch,
+  readPersistedOneSignalRequest,
+  resolveOneSignalIdempotencyKey,
+  type PersistedOneSignalRequest
+} from '../onesignal-idempotency.js';
 import type { NotificationEvent } from '../notification.types.js';
 import type { NotificationDeliveriesRepository } from '../notification-deliveries.repository.js';
 import type { NotificationEventsRepository } from '../notification-events.repository.js';
+
 type BatchDeps = {
   events: NotificationEvent[];
   eventsRepository: NotificationEventsRepository;
@@ -30,9 +36,11 @@ type ResolvedAdminTarget = {
 };
 
 /**
- * Groups admin_driver_* events that share org + title + body into one OneSignal call
- * while keeping per-driver delivery rows and partial-failure semantics.
- * Events with unique content still fall back to the single-recipient handler.
+ * Admin push batching:
+ * - Campaign events share an explicit `payload.campaign_id` → one OneSignal request
+ *   with the full prepared audience (inbox/history remain per-driver).
+ * - Individual events (no campaign_id) are never merged by title/body — each is its
+ *   own send so two intentional same-text campaigns/individuals stay distinct.
  */
 export async function processAdminDriverNotificationBatch({
   events,
@@ -45,38 +53,39 @@ export async function processAdminDriverNotificationBatch({
     return;
   }
 
-  const groups = new Map<string, NotificationEvent[]>();
+  const campaignGroups = new Map<string, NotificationEvent[]>();
+  const individuals: NotificationEvent[] = [];
+
   for (const event of events) {
-    const payload = event.payload ?? {};
-    const title =
-      asNonEmptyString(payload.push_title) ??
-      asNonEmptyString(payload.title) ??
-      'Notification';
-    const message =
-      asNonEmptyString(payload.push_body) ??
-      asNonEmptyString(payload.message) ??
-      asNonEmptyString(payload.body) ??
-      '';
-    const key = adminPushFingerprint({
-      organizationId: event.organization_id,
-      eventType: event.event_type,
-      title,
-      message
-    });
-    const bucket = groups.get(key) ?? [];
-    bucket.push(event);
-    groups.set(key, bucket);
+    const campaignId = getAdminCampaignId(event);
+    if (campaignId) {
+      const bucket = campaignGroups.get(campaignId) ?? [];
+      bucket.push(event);
+      campaignGroups.set(campaignId, bucket);
+    } else {
+      individuals.push(event);
+    }
   }
 
-  // Always use sendAdminGroup (incl. size 1) so injected db/oneSignal are honored in tests
-  // and production batching stays consistent.
-  for (const group of groups.values()) {
+  for (const group of campaignGroups.values()) {
     await sendAdminGroup({
       group,
       eventsRepository,
       deliveriesRepository,
       oneSignal,
-      db
+      db,
+      bulk: true
+    });
+  }
+
+  for (const event of individuals) {
+    await sendAdminGroup({
+      group: [event],
+      eventsRepository,
+      deliveriesRepository,
+      oneSignal,
+      db,
+      bulk: false
     });
   }
 }
@@ -87,8 +96,9 @@ async function sendAdminGroup(input: {
   deliveriesRepository: NotificationDeliveriesRepository;
   oneSignal: OneSignalProvider;
   db: ReturnType<typeof getSupabaseAdmin>;
+  bulk: boolean;
 }): Promise<void> {
-  const { group, eventsRepository, deliveriesRepository, oneSignal, db } = input;
+  const { group, eventsRepository, deliveriesRepository, oneSignal, db, bulk } = input;
   const first = group[0];
   if (!first) {
     return;
@@ -165,6 +175,7 @@ async function sendAdminGroup(input: {
           ? 'jobs'
           : 'system');
 
+    const campaignId = getAdminCampaignId(event);
     const delivery = await deliveriesRepository.createDelivery({
       organization_id: event.organization_id,
       event_id: event.id,
@@ -181,7 +192,8 @@ async function sendAdminGroup(input: {
         category,
         push_preview_title: title,
         push_preview_message: message,
-        bulk_campaign: true
+        bulk_campaign: bulk,
+        ...(campaignId ? { campaign_id: campaignId } : {})
       }
     });
 
@@ -206,31 +218,47 @@ async function sendAdminGroup(input: {
     return;
   }
 
-  const pushData = {
-    event_type: first.event_type,
+  const pushData: Record<string, string> = {
+    event_type: String(first.event_type),
     category: targets[0]?.category ?? 'system',
-    bulk: 'true'
+    bulk: bulk ? 'true' : 'false'
   };
-  const externalUserIds = targets.map((t) => t.authUserId);
-  const idempotencyKey = buildOneSignalIdempotencyKey({
-    eventId: `admin-bulk:${targets
-      .map((t) => t.event.id)
-      .sort()
-      .join(',')}`,
-    externalUserIds,
+  const campaignId = getAdminCampaignId(first);
+  if (campaignId) {
+    pushData.campaign_id = campaignId;
+  }
+
+  const persistedFromEvents = group
+    .map((e) => readPersistedOneSignalRequest(e.payload))
+    .find((p): p is PersistedOneSignalRequest => p != null);
+
+  const liveAudience = [...new Set(targets.map((t) => t.authUserId))].sort();
+  const request: PersistedOneSignalRequest = persistedFromEvents ?? {
+    idempotency_key: resolveOneSignalIdempotencyKey(
+      asNonEmptyString(first.payload?.onesignal_idempotency_key)
+    ),
+    external_user_ids: liveAudience,
     title,
     message,
     data: pushData
-  });
+  };
+
+  // Persist UUID + original audience/payload on every event BEFORE the HTTP call
+  // so retries never rebuild a different key from the remaining recipient list.
+  const payloadPatch = buildPersistedOneSignalPayloadPatch(request);
+  for (const event of group) {
+    await eventsRepository.mergeEventPayload(event.id, payloadPatch);
+    event.payload = { ...(event.payload ?? {}), ...payloadPatch };
+  }
 
   try {
     const { providerMessageId, responseMetadata, idempotencyKey: usedKey } =
       await oneSignal.sendPushToExternalUserIds({
-        externalUserIds,
-        title,
-        message,
-        data: pushData,
-        idempotencyKey
+        externalUserIds: request.external_user_ids,
+        title: request.title,
+        message: request.message,
+        ...(request.data ? { data: request.data } : { data: pushData }),
+        idempotencyKey: request.idempotency_key
       });
     const invalid = new Set(responseMetadata.invalidExternalIds ?? []);
 
@@ -239,7 +267,11 @@ async function sendAdminGroup(input: {
         await deliveriesRepository.markDeliveryFailedRetryable(
           target.deliveryId,
           `OneSignal invalid_aliases.external_id=${target.authUserId}`,
-          nextRetryAtIso()
+          nextRetryAtIso(),
+          {
+            onesignal_idempotency_key: usedKey,
+            onesignal_original_audience: request.external_user_ids
+          }
         );
         await eventsRepository.markEventFailedRetryable(
           target.event.id,
@@ -255,8 +287,12 @@ async function sendAdminGroup(input: {
           event_type: target.event.event_type,
           category: target.category,
           response_metadata: responseMetadata,
-          bulk_recipient_count: targets.length,
-          onesignal_idempotency_key: usedKey
+          bulk_recipient_count: request.external_user_ids.length,
+          onesignal_idempotency_key: usedKey,
+          onesignal_original_audience: request.external_user_ids,
+          onesignal_original_title: request.title,
+          onesignal_original_message: request.message,
+          ...(campaignId ? { campaign_id: campaignId } : {})
         });
         await eventsRepository.markEventDelivered(target.event.id);
       } catch (dbError) {
@@ -264,22 +300,35 @@ async function sendAdminGroup(input: {
           dbError instanceof Error ? dbError.message : 'Failed to persist provider acceptance';
         await deliveriesRepository.markDeliveryFailedRetryable(
           target.deliveryId,
-          `provider_accepted_db_persist_failed:${dbReason};idempotency=${usedKey};provider_message_id=${providerMessageId}`,
-          nextRetryAtIso()
+          `provider_accepted_db_persist_failed:${dbReason}`,
+          nextRetryAtIso(),
+          {
+            onesignal_idempotency_key: usedKey,
+            onesignal_original_audience: request.external_user_ids,
+            onesignal_original_title: request.title,
+            onesignal_original_message: request.message,
+            onesignal_original_data: request.data ?? pushData,
+            provider_message_id_unpersisted: providerMessageId
+          }
         );
         await eventsRepository.markEventFailedRetryable(
           target.event.id,
           `provider_accepted_db_persist_failed;idempotency=${usedKey}`,
           nextRetryAtIso()
         );
+        // Ensure event payload still holds the original request for retry.
+        await eventsRepository.mergeEventPayload(target.event.id, payloadPatch);
       }
     }
 
     logger.info(
       {
-        bulkSize: targets.length,
+        bulkSize: request.external_user_ids.length,
+        targetsPending: targets.length,
         providerMessageId,
-        invalidCount: invalid.size
+        invalidCount: invalid.size,
+        campaignId,
+        idempotencyKey: usedKey
       },
       'Admin driver push bulk accepted by OneSignal'
     );
@@ -293,6 +342,10 @@ async function sendAdminGroup(input: {
       error && typeof error === 'object' && 'permanent' in error
         ? Boolean((error as { permanent?: boolean }).permanent)
         : false;
+    const keyFromErr =
+      error && typeof error === 'object' && 'idempotencyKey' in error
+        ? String((error as { idempotencyKey?: string }).idempotencyKey ?? request.idempotency_key)
+        : request.idempotency_key;
 
     for (const target of targets) {
       if (permanent) {
@@ -302,13 +355,21 @@ async function sendAdminGroup(input: {
         await deliveriesRepository.markDeliveryFailedRetryable(
           target.deliveryId,
           reason,
-          nextRetryAtIso(retryAfterSeconds)
+          nextRetryAtIso(retryAfterSeconds),
+          {
+            onesignal_idempotency_key: keyFromErr,
+            onesignal_original_audience: request.external_user_ids,
+            onesignal_original_title: request.title,
+            onesignal_original_message: request.message,
+            onesignal_original_data: request.data ?? pushData
+          }
         );
         await eventsRepository.markEventFailedRetryable(
           target.event.id,
           reason,
           nextRetryAtIso(retryAfterSeconds)
         );
+        await eventsRepository.mergeEventPayload(target.event.id, payloadPatch);
       }
     }
   }

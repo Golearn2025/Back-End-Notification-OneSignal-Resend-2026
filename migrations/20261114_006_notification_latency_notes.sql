@@ -15,11 +15,15 @@
 --   - reclaim stuck status=processing after timeout
 --   - offerability gate before send (RPC job_leg_is_offerable — already in DB if Stage1/dispatch present)
 --
+-- Admin campaign enqueue (review SQL, not auto-applied):
+--   migrations/20261114_008_admin_campaign_enqueue.sql
+--   Explicit payload.campaign_id (never group solely by title/body).
+--   admin_enqueue_driver_notification_campaign → N inbox/history rows + shared campaign_id
+--   → worker assembles full audience → one OneSignal request.
+--
 -- Optional follow-ups (separate review; not applied here):
---   1) Admin enqueue RPC could emit one campaign event + recipient list instead of N events
---      (reduces claim overhead; deliveries remain per-driver).
---   2) Unique index / stable idempotency on deliveries for timeout races (if not already present).
---   3) Reminder scheduler invalidation on reschedule — trip_reminder_* types exist in app types
+--   1) Unique index / stable idempotency on deliveries for timeout races (if not already present).
+--   2) Reminder scheduler invalidation on reschedule — trip_reminder_* types exist in app types
 --      but no processor/enqueue path was found in this repo at audit time.
 --
 -- Dependency for offerability gate:
