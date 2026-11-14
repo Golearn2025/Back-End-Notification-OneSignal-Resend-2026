@@ -70,8 +70,17 @@ describe('timed campaign 100 on isolated Postgres', () => {
     const orgId = randomUUID();
     const actorId = randomUUID();
     const driverIds: string[] = [];
+    // Slot 0 = your real driver / OneSignal external_id (auth_user_id). Push only — no email.
+    const youDriverId = process.env.BENCH_YOU_DRIVER_ID ?? '1187555a-2e7a-4e06-9463-6c6ef8a9ddc9';
+    const youExternalUserId =
+      process.env.BENCH_YOU_AUTH_USER_ID ?? '6bccf7b2-4cef-40fe-8ba0-bd8a3f59d173';
     await pool.query(`INSERT INTO public.organizations(id, name) VALUES ($1, 'bench')`, [orgId]);
-    for (let i = 0; i < 100; i += 1) {
+    driverIds.push(youDriverId);
+    await pool.query(
+      `INSERT INTO public.drivers(id, organization_id, auth_user_id) VALUES ($1,$2,$3)`,
+      [youDriverId, orgId, youExternalUserId]
+    );
+    for (let i = 1; i < 100; i += 1) {
       const driverId = randomUUID();
       const authId = randomUUID();
       driverIds.push(driverId);
@@ -165,6 +174,7 @@ describe('timed campaign 100 on isolated Postgres', () => {
 
     expect(providerCalls).toHaveLength(1);
     expect(providerCalls[0]?.audience).toHaveLength(100);
+    expect(providerCalls[0]?.audience).toContain(youExternalUserId);
 
     const delivered = Number(
       (
@@ -186,6 +196,10 @@ describe('timed campaign 100 on isolated Postgres', () => {
     expect(deliveries).toBe(100);
 
     const report = {
+      channel: 'onesignal_push',
+      youExternalUserId,
+      youInSameProviderRequest: providerCalls[0]?.audience.includes(youExternalUserId) ?? false,
+      fakeRecipients: 99,
       recipients: 100,
       enqueueMs: Number(enqueueMs.toFixed(2)),
       pickupWaitMs: Number(pickupWaitMs.toFixed(2)),
@@ -197,7 +211,7 @@ describe('timed campaign 100 on isolated Postgres', () => {
       totalDbQueriesIncludingPersist,
       providerCalls: providerCalls.length,
       audienceSize: providerCalls[0]?.audience.length ?? 0,
-      note: 'Isolated Postgres + fake provider; not in-memory adapter timings.'
+      note: 'Isolated Postgres + fake OneSignal provider (push path). Same HTTP request for you + 99 fakes; no email/Resend.'
     };
     // eslint-disable-next-line no-console
     console.log('CAMPAIGN_100_TIMED_REPORT', JSON.stringify(report, null, 2));

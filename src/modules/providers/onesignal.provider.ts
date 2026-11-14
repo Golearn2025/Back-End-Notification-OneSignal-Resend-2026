@@ -1,5 +1,6 @@
 import { getEnv } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
+import { driverAlertSoundPayload } from '../notifications/driver-alert-sound.js';
 import {
   isOneSignalIdempotencyKey,
   resolveOneSignalIdempotencyKey
@@ -114,7 +115,9 @@ export class OneSignalProvider {
       headings: { en: input.title },
       contents: { en: input.message },
       // OneSignal requires UUID for idempotency_key.
-      idempotency_key: idempotencyKey
+      idempotency_key: idempotencyKey,
+      // App-bundled alert (Driver message.caf / res/raw/message + channel driver_alerts_v2).
+      ...driverAlertSoundPayload()
     };
 
     if (input.data && Object.keys(input.data).length > 0) {
@@ -179,7 +182,14 @@ export class OneSignalProvider {
         responseMetadata.external_id = payload.external_id;
       }
 
-      if (invalidExternalIds.length >= externalUserIds.length) {
+      // Only treat as total failure when OneSignal reports zero recipients.
+      // invalid_aliases alone can be noisy while the notification still delivers.
+      const recipients = typeof payload.recipients === 'number' ? payload.recipients : null;
+      if (
+        invalidExternalIds.length > 0 &&
+        new Set(invalidExternalIds).size >= externalUserIds.length &&
+        recipients === 0
+      ) {
         logger.warn(
           { statusCode: response.status, provider: 'onesignal', invalidExternalIds, idempotencyKey },
           'OneSignal push request failed'
@@ -190,6 +200,19 @@ export class OneSignalProvider {
         err.permanent = true;
         err.idempotencyKey = idempotencyKey;
         throw err;
+      }
+
+      if (invalidExternalIds.length > 0) {
+        logger.warn(
+          {
+            provider: 'onesignal',
+            invalidExternalIds,
+            recipients,
+            idempotencyKey,
+            providerMessageId: payload.id
+          },
+          'OneSignal accepted push with some invalid external ids'
+        );
       }
 
       return {
