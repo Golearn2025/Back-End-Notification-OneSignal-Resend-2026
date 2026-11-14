@@ -28,6 +28,7 @@ describe('OneSignal idempotency + timeout', () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role';
     process.env.ONESIGNAL_APP_ID = 'app-id';
     process.env.ONESIGNAL_REST_API_KEY = 'rest-key';
+    delete process.env.ONESIGNAL_ANDROID_CHANNEL_ID;
     resetEnvCacheForTests();
   }
 
