@@ -13,6 +13,7 @@ describe('OneSignal idempotency + timeout', () => {
     resetEnvCacheForTests();
     delete process.env.ONESIGNAL_APP_ID;
     delete process.env.ONESIGNAL_REST_API_KEY;
+    delete process.env.ONESIGNAL_ANDROID_CHANNEL_ID;
     delete process.env.PORT;
     delete process.env.INTERNAL_API_SECRET;
     delete process.env.SUPABASE_URL;
@@ -59,11 +60,39 @@ describe('OneSignal idempotency + timeout', () => {
     expect(body.include_aliases.external_id).toEqual(['a', 'b']);
     expect(body.idempotency_key).toBe(key);
     expect(isOneSignalIdempotencyKey(body.idempotency_key)).toBe(true);
-    // Must match Driver alert-sound.ts / DriverAlertChannels.kt
+    // Without dashboard UUID → app channel fallback
     expect(body.ios_sound).toBe('message.caf');
     expect(body.existing_android_channel_id).toBe('driver_alerts_v2');
     expect(body.android_sound).toBeUndefined();
     expect(body.android_channel_id).toBeUndefined();
+  });
+
+  it('uses dashboard android_channel_id when ONESIGNAL_ANDROID_CHANNEL_ID is set', async () => {
+    stubEnv();
+    const dashboardId = '11111111-2222-4333-8444-555555555555';
+    process.env.ONESIGNAL_ANDROID_CHANNEL_ID = dashboardId;
+    resetEnvCacheForTests();
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({ id: 'os-ch', recipients: 1 }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new OneSignalProvider();
+    await provider.sendPushToExternalUserIds({
+      externalUserIds: ['u1'],
+      title: 'T',
+      message: 'M',
+      idempotencyKey: createOneSignalIdempotencyKey()
+    });
+
+    const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(body.android_channel_id).toBe(dashboardId);
+    expect(body.existing_android_channel_id).toBeUndefined();
+    expect(body.ios_sound).toBe('message.caf');
   });
 
   it('reuses the same UUID on retry after lost response', async () => {

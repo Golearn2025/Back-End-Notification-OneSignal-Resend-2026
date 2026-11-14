@@ -56,6 +56,12 @@ export const envSchema = z.object({
   // Optional in Phase 1; real provider sending is not implemented yet.
   ONESIGNAL_APP_ID: z.string().min(1).optional(),
   ONESIGNAL_REST_API_KEY: z.string().min(1).optional(),
+  /**
+   * OneSignal dashboard Android Notification Category UUID (Settings → Push →
+   * Android Notification Channels). Required for reliable custom sound on Android 8+.
+   * App channel id `driver_alerts_v2` alone is not enough — OneSignal falls back to system tone.
+   */
+  ONESIGNAL_ANDROID_CHANNEL_ID: z.string().uuid().optional(),
   /** Sending transactional email (`POST /emails`). */
   RESEND_API_KEY: optionalResendSecretKey('RESEND_API_KEY'),
   // Resend supports "Name <email@domain.com>" display form; not a plain RFC email string.

@@ -1,28 +1,34 @@
+import { getEnv } from '../../config/env.js';
+
 /**
  * Canonical driver push alert — must match Vantage-Lane-App-Driver
- * `src/features/notifications/constants/alert-sound.ts` and
- * `android/.../DriverAlertChannels.kt` (CHANNEL_ID = driver_alerts_v2,
- * display name "Driver Alerts").
+ * (`message.caf` / `res/raw/message` + channel name "Driver Alerts").
  *
- * Sound files live in the app; backend only references them.
+ * Android 8+: OneSignal only reliably plays a custom sound when the payload
+ * uses a **dashboard** category UUID as `android_channel_id`.
+ * `existing_android_channel_id=driver_alerts_v2` (app-created) was verified
+ * to fall back to the OS default tone in production probes.
  *
- * Android: only `existing_android_channel_id` — the channel already has
- * res/raw/message. Do NOT also send `android_sound` (can stack with the
- * channel / default tone → two sounds). Dashboard `android_channel_id`
- * is a different UUID and 400s if the category was never created there.
+ * Set `ONESIGNAL_ANDROID_CHANNEL_ID` after creating the category in OneSignal
+ * (sound = custom `message`, importance Urgent).
  */
 export const DRIVER_ALERT_IOS_SOUND = 'message.caf';
-/** Resource name in app (documentation / probes); not sent in OneSignal body. */
 export const DRIVER_ALERT_ANDROID_SOUND = 'message';
 export const DRIVER_ALERT_ANDROID_CHANNEL_ID = 'driver_alerts_v2';
 
-/** Fields merged into every driver OneSignal push body. */
-export function driverAlertSoundPayload(): {
-  ios_sound: string;
-  existing_android_channel_id: string;
-} {
-  return {
-    ios_sound: DRIVER_ALERT_IOS_SOUND,
-    existing_android_channel_id: DRIVER_ALERT_ANDROID_CHANNEL_ID
+export function driverAlertSoundPayload(): Record<string, string> {
+  const dashboardChannelId = getEnv().ONESIGNAL_ANDROID_CHANNEL_ID?.trim();
+  const body: Record<string, string> = {
+    ios_sound: DRIVER_ALERT_IOS_SOUND
   };
+
+  if (dashboardChannelId) {
+    // Dashboard category UUID — OneSignal creates OS_<uuid> on device with custom sound.
+    body.android_channel_id = dashboardChannelId;
+  } else {
+    // Fallback (often ignored → system tone). Prefer setting ONESIGNAL_ANDROID_CHANNEL_ID.
+    body.existing_android_channel_id = DRIVER_ALERT_ANDROID_CHANNEL_ID;
+  }
+
+  return body;
 }
