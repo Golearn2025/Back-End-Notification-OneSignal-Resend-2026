@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="supported-color-schemes" content="dark" />
+    <title>Vantage Lane — Booking Confirmation</title>
+    <!--[if mso
+      ]><xml
+        ><o:OfficeDocumentSettings><o:AllowPNG /><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml
+      ><!
+    [endif]-->
+    <style>
+      body{margin:0!important;padding:0!important;width:100%!important}table,td{mso-table-lspace:0pt;mso-table-rspace:0pt}img{border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic}a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important}@media screen and (max-width:620px){.container{width:100%!important}.pad{padding-left:22px!important;padding-right:22px!important}.name{font-size:36px!important}.driver-name{font-size:28px!important}.driver-photo{width:84px!important;height:84px!important}.driver-cell{width:104px!important}.stack{display:block!important;width:100%!important;padding-left:0!important;padding-right:0!important}.metric{font-size:22px!important}.plate{font-size:22px!important}.phone{font-size:20px!important}}
+    </style>
+  </head>
+  <body bgcolor="#090909" style="margin:0;padding:0;background-color:#090909;color:#f4efe4;">
+    <div
+      style="display:none;font-size:1px;line-height:1px;color:#090909;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;"
+    >
+      Your Vantage Lane booking is confirmed. Your chauffeur, vehicle and journey details.
+    </div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#090909">
+      <tr>
+        <td align="center">
+          <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
+          <table
+            role="presentation"
+            class="container"
+            width="600"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            bgcolor="#090909"
+            style="width:100%;max-width:600px;background:#090909;"
+          >
+            <!-- Logo -->
+            <tr>
+              <td align="center" style="padding:28px 22px 18px;">
+                <img
+                  src="https://vantage-lane.com/LOGO/logo%20transparent.png"
+                  width="120"
+                  alt="Vantage Lane"
+                  style="display:block;width:120px;height:auto;margin:0 auto;"
+                />
+                <div
+                  style="font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:20px;letter-spacing:3px;color:#e3c88f;padding-top:10px;"
+                >
+                  PRIVATE CHAUFFEUR · LONDON
+                </div>
+              </td>
+            </tr>
+
+            <!-- Hero vehicle (driver car) -->
+            <tr>
+              <td>
+                <img
+                  src="{{{vehicle_hero_url}}}"
+                  width="600"
+                  alt="Your vehicle"
+                  style="display:block;width:100%;max-width:600px;height:300px;object-fit:cover;object-position:center;"
+                />
+              </td>
+            </tr>
+
+            <!-- Prepared for -->
+            <tr>
+              <td align="center" class="pad" style="padding:28px 40px 8px;">
+                <div
+                  style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:18px;letter-spacing:3px;color:#c8a96a;"
+                >
+                  ● BOOKING CONFIRMED
+                </div>
+                <div
+                  style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:18px;line-height:28px;color:#cfc9bb;padding-top:16px;"
+                >
+                  Prepared for
+                </div>
+                <div
+                  class="name"
+                  style="font-family:Georgia,'Times New Roman',serif;font-size:44px;line-height:1.15;color:#d9b66f;overflow-wrap:anywhere;"
+                >
+                  {{{customer_name}}}
+                </div>
+                <table
+                  role="presentation"
+                  width="84"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  style="margin:18px auto;"
+                >
+                  <tr>
+                    <td height="1" bgcolor="#c8a96a" style="height:1px;line-height:1px;font-size:1px;">&nbsp;</td>
+                  </tr>
+                </table>
+                <div
+                  style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:20px;letter-spacing:2px;color:#d9b66f;"
+                >
+                  {{{date_long}}} · PICK-UP {{{pickup_time}}}
+                </div>
+              </td>
+            </tr>
+
+            <!-- Vehicle title -->
+            <tr>
+              <td class="pad" style="padding:36px 40px 16px;">
+                <div style="text-align:center;">
+                  <div
+                    style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:18px;letter-spacing:3px;color:#c8a96a;"
+                  >
+                    YOUR VEHICLE
+                  </div>
+                  <div
+                    style="font-family:Georgia,'Times New Roman',serif;font-size:30px;line-height:1.2;color:#f4efe4;overflow-wrap:anywhere;padding-top:10px;"
+                  >
+                    {{{vehicle_name}}}
+                  </div>
+                  <div
+                    style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#969086;padding-top:8px;"
+                  >
+                    {{{vehicle_description}}}
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Compact 2×2: left-right, then another row -->
+
+            <tr>
+              <td class="pad" style="padding:4px 40px 28px;">
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  style="max-width:520px;margin:0 auto;"
+                >
+                  <tr>
+                    <td width="50%" valign="top" style="width:50%;padding:0 5px 10px 0;">
+                      <img
+                        src="{{{vehicle_photo_1_url}}}"
+                        width="250"
+                        height="110"
+                        alt="{{{vehicle_photo_1_label}}}"
+                        style="display:block;width:100%;height:110px;object-fit:cover;object-position:center;border-radius:12px;border:1px solid rgba(200,169,106,.30);"
+                      />
+                      <div
+                        style="text-align:center;padding-top:6px;font-family:Arial,Helvetica,sans-serif;font-size:9px;letter-spacing:2px;color:#c8a96a;"
+                      >
+                        {{{vehicle_photo_1_label}}}
+                      </div>
+                    </td>
+                    <td width="50%" valign="top" style="width:50%;padding:0 0 10px 5px;">
+                      <img
+                        src="{{{vehicle_photo_2_url}}}"
+                        width="250"
+                        height="110"
+                        alt="{{{vehicle_photo_2_label}}}"
+                        style="display:block;width:100%;height:110px;object-fit:cover;object-position:center;border-radius:12px;border:1px solid rgba(200,169,106,.30);"
+                      />
+                      <div
+                        style="text-align:center;padding-top:6px;font-family:Arial,Helvetica,sans-serif;font-size:9px;letter-spacing:2px;color:#c8a96a;"
+                      >
+                        {{{vehicle_photo_2_label}}}
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td width="50%" valign="top" style="width:50%;padding:0 5px 0 0;">
+                      <img
+                        src="{{{vehicle_photo_3_url}}}"
+                        width="250"
+                        height="110"
+                        alt="{{{vehicle_photo_3_label}}}"
+                        style="display:block;width:100%;height:110px;object-fit:cover;object-position:center;border-radius:12px;border:1px solid rgba(200,169,106,.30);"
+                      />
+                      <div
+                        style="text-align:center;padding-top:6px;font-family:Arial,Helvetica,sans-serif;font-size:9px;letter-spacing:2px;color:#c8a96a;"
+                      >
+                        {{{vehicle_photo_3_label}}}
+                      </div>
+                    </td>
+                    <td width="50%" valign="top" style="width:50%;padding:0 0 0 5px;">
+                      <img
+                        src="{{{vehicle_photo_4_url}}}"
+                        width="250"
+                        height="110"
+                        alt="{{{vehicle_photo_4_label}}}"
+                        style="display:block;width:100%;height:110px;object-fit:cover;object-position:center;border-radius:12px;border:1px solid rgba(200,169,106,.30);"
+                      />
+                      <div
+                        style="text-align:center;padding-top:6px;font-family:Arial,Helvetica,sans-serif;font-size:9px;letter-spacing:2px;color:#c8a96a;"
+                      >
+                        {{{vehicle_photo_4_label}}}
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Driver card -->
+            <tr>
+              <td class="pad" style="padding:0 40px 24px;">
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  bgcolor="#11100e"
+                  style="background:#11100e;border:1px solid #77613d;border-radius:22px;"
+                >
+                  <tr>
+                    <td style="padding:26px 22px;">
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                          <td class="driver-cell" width="140" valign="middle" style="width:140px;">
+                            <img
+                              class="driver-photo"
+                              src="{{{driver_photo_url}}}"
+                              width="114"
+                              height="114"
+                              alt="Your chauffeur"
+                              style="display:block;width:114px;height:114px;object-fit:cover;border-radius:50%;border:3px solid #c8a96a;"
+                            />
+                          </td>
+                          <td valign="middle">
+                            <div
+                              style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:18px;letter-spacing:3px;color:#c8a96a;"
+                            >
+                              YOUR CHAUFFEUR
+                            </div>
+                            <div
+                              class="driver-name"
+                              style="font-family:Georgia,'Times New Roman',serif;font-size:32px;line-height:1.15;color:#f4efe4;overflow-wrap:anywhere;"
+                            >
+                              {{{driver_name}}}
+                            </div>
+                            <div
+                              style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:20px;color:#969086;"
+                            >
+                              PROFESSIONAL CHAUFFEUR
+                            </div>
+                          </td>
+                        </tr>
+                      </table>
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                          <td
+                            class="stack"
+                            width="52%"
+                            valign="top"
+                            style="padding:22px 12px 22px 0;border-top:1px solid #3d3426;"
+                          >
+                            <div
+                              style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:18px;letter-spacing:3px;color:#c8a96a;"
+                            >
+                              DIRECT LINE
+                            </div>
+                            <a
+                              class="phone"
+                              href="{{{driver_call_url}}}"
+                              style="font-family:Georgia,'Times New Roman',serif;font-size:22px;line-height:36px;color:#f1ebdc;text-decoration:none;"
+                              >{{{driver_phone}}}</a
+                            >
+                          </td>
+                          <td class="stack" valign="top" style="padding:22px 0;border-top:1px solid #3d3426;">
+                            <div
+                              style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:18px;letter-spacing:3px;color:#c8a96a;"
+                            >
+                              REGISTRATION
+                            </div>
+                            <span
+                              class="plate"
+                              style="display:inline-block;margin-top:6px;background:#f5c518;border-radius:6px;padding:6px 12px;color:#1a1a1a;font-family:Arial,Helvetica,sans-serif;font-weight:bold;font-size:24px;letter-spacing:2px;"
+                              >{{{vehicle_registration}}}</span
+                            >
+                          </td>
+                        </tr>
+                      </table>
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                          <td width="48%">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                              <tr>
+                                <td align="center" bgcolor="#c8a96a" style="border-radius:30px;">
+                                  <a
+                                    href="{{{driver_whatsapp_url}}}"
+                                    style="display:block;padding:14px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;letter-spacing:2px;color:#14100a;text-decoration:none;"
+                                    >WHATSAPP</a
+                                  >
+                                </td>
+                              </tr>
+                            </table>
+                          </td>
+                          <td width="4%">&nbsp;</td>
+                          <td width="48%">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                              <tr>
+                                <td align="center" style="border:1px solid #c8a96a;border-radius:30px;">
+                                  <a
+                                    href="{{{driver_call_url}}}"
+                                    style="display:block;padding:14px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;letter-spacing:2px;color:#c8a96a;text-decoration:none;"
+                                    >CALL NOW</a
+                                  >
+                                </td>
+                              </tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Journey -->
+            <tr>
+              <td class="pad" style="padding:24px 40px 8px;">
+                <div
+                  style="text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:3px;color:#c8a96a;"
+                >
+                  YOUR JOURNEY
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="pad" style="padding:0 32px 20px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td width="33%" valign="top" style="padding:16px 8px;border-bottom:1px solid #3d3426;">
+                      <div
+                        style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:3px;color:#c8a96a;"
+                      >
+                        DATE
+                      </div>
+                      <div
+                        class="metric"
+                        style="font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:34px;color:#f4efe4;"
+                      >
+                        {{{date_short}}}
+                      </div>
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#969086;">
+                        {{{weekday}}}
+                      </div>
+                    </td>
+                    <td width="33%" valign="top" style="padding:16px 8px;border-bottom:1px solid #3d3426;">
+                      <div
+                        style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:3px;color:#c8a96a;"
+                      >
+                        PICK-UP
+                      </div>
+                      <div
+                        class="metric"
+                        style="font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:34px;color:#f4efe4;"
+                      >
+                        {{{pickup_time}}}
+                      </div>
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#969086;">
+                        {{{pickup_time_note}}}
+                      </div>
+                    </td>
+                    <td width="33%" valign="top" style="padding:16px 8px;border-bottom:1px solid #3d3426;">
+                      <div
+                        style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:3px;color:#c8a96a;"
+                      >
+                        EST. ARRIVAL
+                      </div>
+                      <div
+                        class="metric"
+                        style="font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:34px;color:#f4efe4;"
+                      >
+                        {{{arrival_time}}}
+                      </div>
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#969086;">
+                        {{{distance_duration}}}
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td width="33%" valign="top" style="padding:16px 8px;border-bottom:1px solid #3d3426;">
+                      <div
+                        style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:3px;color:#c8a96a;"
+                      >
+                        FLIGHT
+                      </div>
+                      <div
+                        class="metric"
+                        style="font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:34px;color:#f4efe4;"
+                      >
+                        {{{flight_number}}}
+                      </div>
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#969086;">
+                        {{{airline}}}
+                      </div>
+                    </td>
+                    <td width="33%" valign="top" style="padding:16px 8px;border-bottom:1px solid #3d3426;">
+                      <div
+                        style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:3px;color:#c8a96a;"
+                      >
+                        PASSENGERS
+                      </div>
+                      <div
+                        class="metric"
+                        style="font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:34px;color:#f4efe4;"
+                      >
+                        {{{passengers}}}
+                      </div>
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#969086;">
+                        Luggage: {{{luggage}}}
+                      </div>
+                    </td>
+                    <td width="33%" valign="top" style="padding:16px 8px;border-bottom:1px solid #3d3426;">
+                      <div
+                        style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:3px;color:#c8a96a;"
+                      >
+                        SERVICE
+                      </div>
+                      <div
+                        class="metric"
+                        style="font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:34px;color:#f4efe4;"
+                      >
+                        {{{service_type}}}
+                      </div>
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#969086;">
+                        {{{service_description}}}
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Route -->
+            <tr>
+              <td class="pad" style="padding:10px 40px 14px;">
+                <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:3px;color:#c8a96a;">
+                  PICK-UP · {{{pickup_time}}}
+                </div>
+                <div
+                  style="font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:1.2;color:#f4efe4;overflow-wrap:anywhere;"
+                >
+                  {{{pickup_name}}}
+                </div>
+                <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:20px;color:#969086;">
+                  {{{pickup_address}}}
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="pad" style="padding:0 40px 14px;">
+                <div style="border-left:2px solid #c8a96a;padding:10px 0 10px 18px;">
+                  <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:2px;color:#c8a96a;">
+                    {{{distance_duration}}}
+                  </div>
+                  <a
+                    href="{{{maps_url}}}"
+                    style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:2px;color:#c8a96a;line-height:28px;text-decoration:none;"
+                    >OPEN IN MAPS →</a
+                  >
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="pad" style="padding:0 40px 36px;">
+                <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:3px;color:#c8a96a;">
+                  DROP-OFF · EST. {{{arrival_time}}}
+                </div>
+                <div
+                  style="font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:1.2;color:#f4efe4;overflow-wrap:anywhere;"
+                >
+                  {{{dropoff_name}}}
+                </div>
+                <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:20px;color:#969086;">
+                  {{{dropoff_address}}}
+                </div>
+              </td>
+            </tr>
+
+            <!-- Footer / office help — same contacts as payment confirm -->
+            <tr>
+              <td class="pad" style="padding:0 40px 40px;">
+                <div style="border-top:1px solid #3d3426;padding-top:28px;text-align:center;">
+                  <img
+                    src="https://vantage-lane.com/LOGO/logo%20transparent.png"
+                    width="110"
+                    alt="Vantage Lane"
+                    style="display:block;width:110px;height:auto;margin:0 auto;"
+                  />
+                  <div style="margin-top:12px;">
+                    <a
+                      href="https://vantage-lane.com"
+                      style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:3px;color:#c8a96a;text-decoration:none;"
+                      >vantage-lane.com</a
+                    >
+                  </div>
+                  <div
+                    style="padding-top:24px;font-family:Georgia,'Times New Roman',serif;font-size:24px;color:#f4efe4;"
+                  >
+                    NEED HELP?
+                  </div>
+                  <div
+                    style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:20px;color:#969086;padding-top:8px;"
+                  >
+                    Reach us anytime:
+                  </div>
+                  <div style="padding-top:18px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td width="32%" valign="top" align="center" style="padding:0 4px;">
+                          <div
+                            style="font-family:Arial,Helvetica,sans-serif;font-size:10px;letter-spacing:2px;color:#c8a96a;padding-bottom:8px;"
+                          >
+                            EMAIL
+                          </div>
+                          <a
+                            href="{{{support_email_url}}}"
+                            style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#f4efe4;text-decoration:none;"
+                            >{{{support_email}}}</a
+                          >
+                        </td>
+                        <td
+                          width="36%"
+                          valign="top"
+                          align="center"
+                          style="padding:0 4px;border-left:1px solid #3d3426;border-right:1px solid #3d3426;"
+                        >
+                          <div
+                            style="font-family:Arial,Helvetica,sans-serif;font-size:10px;letter-spacing:2px;color:#c8a96a;padding-bottom:8px;"
+                          >
+                            WHATSAPP
+                          </div>
+                          <a
+                            href="{{{support_whatsapp_url}}}"
+                            style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#f4efe4;text-decoration:none;"
+                            >{{{support_whatsapp}}}</a
+                          >
+                        </td>
+                        <td width="32%" valign="top" align="center" style="padding:0 4px;">
+                          <div
+                            style="font-family:Arial,Helvetica,sans-serif;font-size:10px;letter-spacing:2px;color:#c8a96a;padding-bottom:8px;"
+                          >
+                            CALL
+                          </div>
+                          <a
+                            href="{{{support_call_url}}}"
+                            style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#f4efe4;text-decoration:none;"
+                            >{{{support_phone}}}</a
+                          >
+                        </td>
+                      </tr>
+                    </table>
+                  </div>
+                  <div
+                    style="padding-top:18px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:18px;color:#969086;"
+                  >
+                    All times are shown in UK time (Europe/London).
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </table>
+          <!--[if mso]></td></tr></table><![endif]-->
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
