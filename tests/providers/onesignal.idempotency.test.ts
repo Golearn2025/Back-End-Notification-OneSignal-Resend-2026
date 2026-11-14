@@ -60,10 +60,10 @@ describe('OneSignal idempotency + timeout', () => {
     expect(body.include_aliases.external_id).toEqual(['a', 'b']);
     expect(body.idempotency_key).toBe(key);
     expect(isOneSignalIdempotencyKey(body.idempotency_key)).toBe(true);
-    // Without dashboard UUID → app channel fallback
+    // Without dashboard UUID → app channel fallback + resource name `message`
     expect(body.ios_sound).toBe('message.caf');
+    expect(body.android_sound).toBe('message');
     expect(body.existing_android_channel_id).toBe('driver_alerts_v2');
-    expect(body.android_sound).toBeUndefined();
     expect(body.android_channel_id).toBeUndefined();
   });
 
@@ -91,6 +91,7 @@ describe('OneSignal idempotency + timeout', () => {
 
     const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
     expect(body.android_channel_id).toBe(dashboardId);
+    expect(body.android_sound).toBe('message');
     expect(body.existing_android_channel_id).toBeUndefined();
     expect(body.ios_sound).toBe('message.caf');
   });
