@@ -5,6 +5,10 @@ import {
   type SendDriverJobAcceptedEmailInput
 } from './resend/driver-job-accepted.template.js';
 import {
+  buildDriverAssignedCustomerTemplateSend,
+  type SendDriverAssignedCustomerEmailInput
+} from './resend/driver-assigned-customer.template.js';
+import {
   buildDriverDocumentExpiringTemplateSend,
   type SendDriverDocumentExpiringEmailInput
 } from './resend/driver-document-expiring.template.js';
@@ -40,6 +44,7 @@ export type SendCustomerAccountCreatedEmailResult = {
 
 export type { SendResendTemplateInput } from './resend/send-template.types.js';
 export type { SendDriverJobAcceptedEmailInput } from './resend/driver-job-accepted.template.js';
+export type { SendDriverAssignedCustomerEmailInput } from './resend/driver-assigned-customer.template.js';
 export type { SendDriverDocumentExpiringEmailInput } from './resend/driver-document-expiring.template.js';
 
 function escapeTemplateValue(value: unknown): string {
@@ -183,6 +188,12 @@ export class ResendProvider implements ICustomerAccountCreatedEmailSender {
     return this.sendTemplateEmail(buildDriverJobAcceptedTemplateSend(input));
   }
 
+  async sendDriverAssignedCustomerEmail(
+    input: SendDriverAssignedCustomerEmailInput
+  ): Promise<SendCustomerAccountCreatedEmailResult> {
+    return this.sendTemplateEmail(buildDriverAssignedCustomerTemplateSend(input));
+  }
+
   async sendDriverDocumentExpiringEmail(
     input: SendDriverDocumentExpiringEmailInput
   ): Promise<SendCustomerAccountCreatedEmailResult> {
@@ -205,6 +216,9 @@ export type ICustomerAccountCreatedEmailSender = {
   ): Promise<SendCustomerAccountCreatedEmailResult>;
   sendDriverJobAcceptedEmail(
     input: SendDriverJobAcceptedEmailInput
+  ): Promise<SendCustomerAccountCreatedEmailResult>;
+  sendDriverAssignedCustomerEmail(
+    input: SendDriverAssignedCustomerEmailInput
   ): Promise<SendCustomerAccountCreatedEmailResult>;
   sendDriverDocumentExpiringEmail(
     input: SendDriverDocumentExpiringEmailInput

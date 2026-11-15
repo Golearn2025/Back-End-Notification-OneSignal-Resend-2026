@@ -60,6 +60,12 @@ const TEMPLATES: readonly TemplateDef[] = [
     defaultSubject: 'Job confirmed — Vantage Lane'
   },
   {
+    alias: 'driver_assigned_customer_v1',
+    filename: 'driver_assigned_customer_v1.html',
+    displayName: 'Vantage Lane — driver assigned customer brief v1',
+    defaultSubject: 'Your chauffeur is confirmed · Vantage Lane'
+  },
+  {
     alias: 'driver_document_expiring_v1',
     filename: 'driver_document_expiring_v1.html',
     displayName: 'Vantage Lane — driver document expiring v1',

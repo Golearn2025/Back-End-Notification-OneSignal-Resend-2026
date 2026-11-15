@@ -5,12 +5,14 @@ import {
   DEFAULT_SUPPORT_EMAIL,
   DEFAULT_SUPPORT_PHONE,
   DEFAULT_SUPPORT_WHATSAPP,
+  DRIVER_ASSIGNED_CUSTOMER_TEMPLATE_ALIAS,
   DRIVER_JOB_ACCEPTED_TEMPLATE_ALIAS,
   asNonEmptyString,
   isDeliverySucceeded,
   nextRetryAtIso
 } from '../notification-shared.js';
 import { loadBookingNotificationContext } from '../booking-notification-context.service.js';
+import { loadDriverAssignedCustomerBrief } from '../driver-assigned-customer-brief.service.js';
 import {
   buildDriverJobAcceptedPushMessage,
   determineJobUrgency,
@@ -361,6 +363,79 @@ export async function processDriverJobAccepted(
     }
   } else {
     logger.warn({ eventId: event.id, jobId }, 'driver_job_accepted: missing driver_email; skipping email');
+  }
+
+  // Customer chauffeur brief (Resend driver_assigned_customer_v1) — same Accept event.
+  try {
+    const brief = await loadDriverAssignedCustomerBrief(db, {
+      organizationId: v.organization_id,
+      bookingId: v.booking_id,
+      bookingLegId: v.job_id
+    });
+
+    if (!brief) {
+      logger.warn(
+        { eventId: event.id, jobId: v.job_id, bookingId: v.booking_id },
+        'driver_assigned_customer: missing customer email or assignment context; skipping'
+      );
+    } else {
+      const customerDelivery = await deliveriesRepository.createDelivery({
+        organization_id: event.organization_id,
+        event_id: event.id,
+        recipient_type: 'customer',
+        recipient_selection: 'specific_customer',
+        recipient_id: null,
+        recipient_address: brief.to,
+        channel: 'email',
+        provider: 'resend',
+        status: 'queued',
+        max_attempts: 3,
+        metadata: {
+          template_alias: DRIVER_ASSIGNED_CUSTOMER_TEMPLATE_ALIAS,
+          template_version: 'v1',
+          render_mode: 'resend_template',
+          reply_to: DEFAULT_SUPPORT_EMAIL,
+          event_family: 'customer_brief',
+          job_id: v.job_id,
+          booking_reference: brief.vars.booking_reference
+        }
+      });
+
+      if (!isDeliverySucceeded(customerDelivery.status)) {
+        await deliveriesRepository.markDeliverySending(customerDelivery.id);
+        try {
+          const { providerMessageId } = await resend.sendDriverAssignedCustomerEmail({
+            to: brief.to,
+            vars: brief.vars
+          });
+          await deliveriesRepository.markDeliveryProviderAccepted(customerDelivery.id, providerMessageId, {
+            provider: 'resend',
+            event_type: 'driver_job_accepted',
+            template_alias: DRIVER_ASSIGNED_CUSTOMER_TEMPLATE_ALIAS,
+            template_version: 'v1',
+            render_mode: 'resend_template',
+            reply_to: DEFAULT_SUPPORT_EMAIL,
+            event_family: 'customer_brief',
+            job_id: v.job_id
+          });
+          logger.info(
+            { eventId: event.id, to: brief.to, bookingReference: brief.vars.booking_reference },
+            'driver_assigned_customer brief accepted by Resend'
+          );
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : 'Resend driver_assigned_customer failed';
+          await deliveriesRepository.markDeliveryFailedRetryable(
+            customerDelivery.id,
+            reason,
+            nextRetryAtIso()
+          );
+          logger.warn({ eventId: event.id, err: reason }, 'driver_assigned_customer email failed');
+        }
+      }
+    }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'driver_assigned_customer unexpected error';
+    logger.warn({ eventId: event.id, err: reason }, 'driver_assigned_customer skipped');
   }
 
   if (authUserId) {

@@ -14,6 +14,7 @@ export const RESEND_TEMPLATE_ALIAS = 'customer_account_created_v1';
 export const PAYMENT_TEMPLATE_ALIAS = 'payment_success_customer_v1';
 export const JOBS_MAILBOX_TEMPLATE_ALIAS = 'jobs_mailbox_booking_confirmed_v1';
 export const DRIVER_JOB_ACCEPTED_TEMPLATE_ALIAS = 'driver_job_accepted_v1';
+export const DRIVER_ASSIGNED_CUSTOMER_TEMPLATE_ALIAS = 'driver_assigned_customer_v1';
 export const DRIVER_DOCUMENT_EXPIRING_TEMPLATE_ALIAS = 'driver_document_expiring_v1';
 export const JOBS_MAILBOX_ADDRESS = 'newjobs@vantage-lane.com';
 

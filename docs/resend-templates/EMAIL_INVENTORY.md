@@ -16,7 +16,7 @@ Scop: când terminăm fiecare template, îl marcăm aici. La final ștergem / de
 |---|--------------|-------------|-----------------|--------|------|
 | C1 | `payment_success_customer_v1` | Payment successful | Plată booking reușită | **DONE v2** | Pickup/dropoff/flight/category/vehicle; butoane Email/WA/Call |
 | C2 | `customer_account_created_v1` | Welcome | Confirmare email / cont creat | **DONE v2** | CTA Book a journey; butoane Email/WA/Call |
-| C3 | *(nou)* `customer_driver_assigned_v1` | Driver assigned | După accept șofer | **TODO** | Nu există pe Resend; design vechi în Driver app |
+| C3 | `driver_assigned_customer_v1` | Driver assigned | După accept șofer | **DONE** | Wired pe `driver_job_accepted` → Resend; brief șofer/mașină |
 | C4 | *(opțional)* trip started / arriving / completed / cancelled | — | Lifecycle trip | **NU pe Resend** | Doar HTML în `Vantage-Lane-App-Driver/.../email-templates/` — de decis ce păstrăm |
 
 ---
