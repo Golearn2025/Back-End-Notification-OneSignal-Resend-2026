@@ -1,10 +1,12 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 
 /** Cream / off-white name colour matching the official board. */
 const NAME_WHITE = rgb(0.957, 0.937, 0.894);
+
+const WELCOME_BOARD_RELATIVE = join('docs', 'resend-templates', 'assets', 'welcome-board-template.pdf');
 
 function guestDisplayName(input: {
   firstName?: string | null;
@@ -19,10 +21,23 @@ function guestDisplayName(input: {
   return joined || 'Guest';
 }
 
+/**
+ * Resolve PDF from repo root (Render cwd) or relative to this module.
+ * `tsc` emits under dist/ and does not copy docs/ — import.meta-relative
+ * paths that assume source layout break in production.
+ */
 function templatePath(): string {
-  return join(
-    dirname(fileURLToPath(import.meta.url)),
-    '../../../../docs/resend-templates/assets/welcome-board-template.pdf'
+  const here = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    join(process.cwd(), WELCOME_BOARD_RELATIVE),
+    join(here, '..', '..', '..', '..', '..', WELCOME_BOARD_RELATIVE), // dist/src/modules/providers/resend → repo root
+    join(here, '..', '..', '..', '..', WELCOME_BOARD_RELATIVE) // src/modules/providers/resend → repo root
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(
+    `Welcome board PDF not found. Tried: ${candidates.join(' | ')}`
   );
 }
 
