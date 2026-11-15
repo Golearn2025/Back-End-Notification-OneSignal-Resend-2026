@@ -335,9 +335,34 @@ async function sendAdminGroup(input: {
         idempotencyKey: request.idempotency_key
       });
     const invalid = new Set(responseMetadata.invalidExternalIds ?? []);
+    const recipients =
+      typeof responseMetadata.recipients === 'number' ? responseMetadata.recipients : 0;
 
-    const accepted = targets.filter((t) => !invalid.has(t.authUserId));
-    const rejected = targets.filter((t) => invalid.has(t.authUserId));
+    let accepted = targets.filter((t) => !invalid.has(t.authUserId));
+    let rejected = targets.filter((t) => invalid.has(t.authUserId));
+
+    // OneSignal can list external_ids in invalid_aliases while still delivering to a
+    // subscribed device under that user (common with stale Unsubscribed subscriptions).
+    // If the provider accepted the notification and reported recipients > 0, and every
+    // target was "invalid", treat as delivered instead of false failed_retryable.
+    if (
+      rejected.length > 0 &&
+      accepted.length === 0 &&
+      providerMessageId &&
+      recipients > 0
+    ) {
+      logger.warn(
+        {
+          providerMessageId,
+          recipients,
+          invalidExternalIds: [...invalid],
+          onesignal_idempotency_key: usedKey
+        },
+        'OneSignal invalid_aliases noise with recipients>0 — marking admin targets delivered'
+      );
+      accepted = rejected;
+      rejected = [];
+    }
 
     for (const target of rejected) {
       await deliveriesRepository.markDeliveryFailedRetryable(

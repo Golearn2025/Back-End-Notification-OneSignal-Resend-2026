@@ -261,7 +261,10 @@ export class NotificationEventsRepository {
       .update({
         status: 'delivered',
         processed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        failed_at: null,
+        next_retry_at: null,
+        guardrail_result: null
       })
       .in('id', ids);
 
@@ -278,7 +281,11 @@ export class NotificationEventsRepository {
 
   async markEventDelivered(eventId: string): Promise<void> {
     await this.updateEventStatus(eventId, 'delivered', {
-      processed_at: new Date().toISOString()
+      processed_at: new Date().toISOString(),
+      // Clear stale OneSignal invalid_aliases noise from prior retry attempts.
+      failed_at: null,
+      next_retry_at: null,
+      guardrail_result: null
     });
   }
 
