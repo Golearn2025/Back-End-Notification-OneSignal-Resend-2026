@@ -101,11 +101,13 @@ export async function buildWelcomeBoardPdf(input: {
   customerFullName?: string | null;
   bookingReference?: string | null;
 }): Promise<{ bytes: Uint8Array; filename: string; guestName: string }> {
-  const guestName = guestDisplayName({
-    firstName: input.customerFirstName,
-    lastName: input.customerLastName,
-    fullName: input.customerFullName
-  });
+  // exactOptionalPropertyTypes: coerce undefined → null before passing optional props
+  const nameParts = {
+    firstName: input.customerFirstName ?? null,
+    lastName: input.customerLastName ?? null,
+    fullName: input.customerFullName ?? null
+  };
+  const guestName = guestDisplayName(nameParts);
   const ref = (input.bookingReference ?? '').trim() || 'booking';
   const safeRef = ref.replace(/[^a-zA-Z0-9_-]+/g, '-');
 
@@ -125,11 +127,7 @@ export async function buildWelcomeBoardPdf(input: {
   const rightCenterX = (panelLeft + panelRight) / 2;
   const nameCenterY = height * 0.50;
 
-  const lines = splitAlwaysTwoLines({
-    firstName: input.customerFirstName,
-    lastName: input.customerLastName,
-    fullName: input.customerFullName
-  });
+  const lines = splitAlwaysTwoLines(nameParts);
 
   const serifBold = await out.embedFont(StandardFonts.TimesRomanBold);
   const size = sizeForLines(lines, serifBold, maxNameWidth);

@@ -296,7 +296,8 @@ export function buildDriverJobAcceptedTemplateSend(
     subject: ref.length > 0 ? `Job confirmed — ${ref}` : 'Job confirmed — Vantage Lane',
     replyTo: supportEmail,
     tags: [{ name: 'event_type', value: 'driver_job_accepted' }],
-    attachments,
+    // exactOptionalPropertyTypes: omit key when absent (do not pass undefined)
+    ...(attachments ? { attachments } : {}),
     variables: {
       driver_first_name: normalizeText(input.driverFirstName, 'there'),
       booking_reference: ref || '—',
